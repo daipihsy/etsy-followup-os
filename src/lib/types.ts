@@ -77,61 +77,23 @@ export interface Listing {
   updatedAt: string; // ISO datetime
 }
 
-export type ActionType =
-  | 'Price'
-  | 'Discount'
-  | 'Main Image'
-  | 'Secondary Images'
-  | 'Title'
-  | 'Tags / SEO'
-  | 'Description'
-  | 'Video'
-  | 'Variation'
-  | 'Personalization'
-  | 'Shipping'
-  | 'Processing Time'
-  | 'Ads ON'
-  | 'Ads OFF'
-  | 'Ads Strategy'
-  | 'New Scene Image'
-  | 'New Variant'
-  | 'Promotion'
-  | 'Coupon'
-  | 'Inventory'
-  | 'Other';
+// The short, real-world list of "what did I adjust". Kept intentionally small.
+// Values are the user's own operational vocabulary (Chinese).
+export type ActionType = string;
 
-export const ACTION_TYPES: ActionType[] = [
-  'Price',
-  'Discount',
-  'Main Image',
-  'Secondary Images',
-  'Title',
-  'Tags / SEO',
-  'Description',
-  'Video',
-  'Variation',
-  'Personalization',
-  'Shipping',
-  'Processing Time',
-  'Ads ON',
-  'Ads OFF',
-  'Ads Strategy',
-  'New Scene Image',
-  'New Variant',
-  'Promotion',
-  'Coupon',
-  'Inventory',
-  'Other',
-];
+export const ACTION_TYPES: string[] = ['价格', '主图', '附图', '视频', '选项', '逻辑', '备注/其他'];
 
 export interface Action {
   id: string;
   listingId: string;
   date: string; // ISO date the action happened
-  type: ActionType;
+  type: ActionType; // primary category (= types[0]) for compatibility/sorting
+  types?: ActionType[]; // everything adjusted in this action (multi-select)
+  linkUrl?: string; // optional attached link (e.g. the new image / a reference)
+  linkName?: string; // custom display name for the link
   beforeValue?: string;
   afterValue?: string;
-  reason?: string;
+  reason?: string; // note
   notes?: string;
   reviewAfterDays?: number | null;
   reviewDate?: string; // ISO date, derived from date + reviewAfterDays

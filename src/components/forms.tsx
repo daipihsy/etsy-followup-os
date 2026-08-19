@@ -7,17 +7,18 @@ import {
   addAction,
   addSnapshot,
   completeReview,
+  countTodayRecords,
   createExperiment,
   createListing,
   concludeExperiment,
   updateListing,
 } from '@/lib/repo';
+import { todayISO } from '@/lib/date';
 import {
   ACTION_TYPES,
   AD_STRATEGIES,
   LISTING_STATUSES,
   REVIEW_DECISIONS,
-  type ActionType,
   type AdStrategy,
   type Experiment,
   type ExperimentStatus,
@@ -27,7 +28,7 @@ import {
   type ReviewDecision,
 } from '@/lib/types';
 import { fmtDiff, fmtNum, parseNum } from '@/lib/util';
-import { Field, Modal, Segmented, useToast } from './ui';
+import { DateInput, Field, Modal, Segmented, useToast } from './ui';
 import type { DerivedListing } from '@/lib/derive';
 
 function useSettings() {
@@ -404,33 +405,41 @@ export function ActionModal({
 }) {
   const settings = useSettings();
   const toast = useToast();
-  const [type, setType] = useState<ActionType>('Price');
-  const [beforeValue, setBefore] = useState('');
-  const [afterValue, setAfter] = useState('');
-  const [reason, setReason] = useState('');
+  const [types, setTypes] = useState<string[]>([]);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkName, setLinkName] = useState('');
+  const [note, setNote] = useState('');
+  const [date, setDate] = useState(todayISO());
   const [reviewDays, setReviewDays] = useState<number | null>(settings.defaultReviewIntervalDays);
 
-  // Initialise reviewDays to the setting once when opened.
   const [seeded, setSeeded] = useState(false);
   if (open && !seeded) {
     setSeeded(true);
     setReviewDays(settings.defaultReviewIntervalDays);
+    setDate(todayISO());
+    setTypes([]);
+    setLinkUrl('');
+    setLinkName('');
+    setNote('');
   }
   if (!open && seeded) setSeeded(false);
+
+  function toggleType(t: string) {
+    setTypes((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]));
+  }
 
   async function submit() {
     await addAction({
       listingId,
-      type,
-      beforeValue: beforeValue.trim() || undefined,
-      afterValue: afterValue.trim() || undefined,
-      reason: reason.trim() || undefined,
+      date,
+      types,
+      linkUrl: linkUrl.trim() || undefined,
+      linkName: linkName.trim() || undefined,
+      reason: note.trim() || undefined,
       reviewAfterDays: reviewDays,
     });
-    toast('Action logged', 'positive');
-    setBefore('');
-    setAfter('');
-    setReason('');
+    const n = await countTodayRecords();
+    toast(`已记录 · 今天第 ${n} 次`, 'positive');
     onClose();
   }
 
@@ -438,50 +447,62 @@ export function ActionModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={`Add Action${listingName ? ` — ${listingName}` : ''}`}
+      title={`记录动作${listingName ? ` — ${listingName}` : ''}`}
       footer={
         <>
           <button className="btn-outline" onClick={onClose}>
-            Cancel
+            取消
           </button>
           <button className="btn-primary" onClick={submit}>
-            Log Action
+            记录
           </button>
         </>
       }
     >
       <div className="space-y-3">
-        <Field label="Action Type">
-          <select className="input" value={type} onChange={(e) => setType(e.target.value as ActionType)}>
+        <Field label="调整了什么" hint="可多选">
+          <div className="flex flex-wrap gap-1.5">
             {ACTION_TYPES.map((t) => (
-              <option key={t}>{t}</option>
+              <button
+                key={t}
+                type="button"
+                onClick={() => toggleType(t)}
+                className={types.includes(t) ? 'btn-primary btn-xs' : 'btn-outline btn-xs'}
+              >
+                {t}
+              </button>
             ))}
-          </select>
+          </div>
         </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Before">
-            <input className="input" value={beforeValue} onChange={(e) => setBefore(e.target.value)} placeholder="$45.99" />
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="链接名称" className="col-span-1">
+            <input className="input" value={linkName} onChange={(e) => setLinkName(e.target.value)} placeholder="新主图 v2" />
           </Field>
-          <Field label="After">
-            <input className="input" value={afterValue} onChange={(e) => setAfter(e.target.value)} placeholder="$41.99" />
+          <Field label="链接 (URL)" className="col-span-2">
+            <input className="input" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://…" />
           </Field>
         </div>
-        <Field label="Reason / Notes">
+        <Field label="备注">
           <textarea
-            className="input min-h-[70px]"
-            value={reason}
+            className="input min-h-[64px]"
+            value={note}
             autoFocus
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Strong CTR but low CVR — testing whether price affects conversion."
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="为什么这么改、想验证什么…"
           />
         </Field>
-        <Field label="Set next review in" hint="· marks your default interval">
-          <ReviewIntervalPicker
-            value={reviewDays}
-            onChange={setReviewDays}
-            defaultDays={settings.defaultReviewIntervalDays}
-          />
-        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="日期">
+            <DateInput value={date} onChange={setDate} />
+          </Field>
+          <Field label="下次复盘" hint="· 是你的默认间隔">
+            <ReviewIntervalPicker
+              value={reviewDays}
+              onChange={setReviewDays}
+              defaultDays={settings.defaultReviewIntervalDays}
+            />
+          </Field>
+        </div>
       </div>
     </Modal>
   );
@@ -507,17 +528,20 @@ export function SnapshotModal({
   const toast = useToast();
   const [metrics, setMetrics] = useState<Metrics>(prefill ?? {});
   const [notes, setNotes] = useState('');
+  const [date, setDate] = useState(todayISO());
 
   const [seeded, setSeeded] = useState(false);
   if (open && !seeded) {
     setSeeded(true);
     setMetrics(prefill ?? {});
+    setDate(todayISO());
   }
   if (!open && seeded) setSeeded(false);
 
   async function submit() {
-    await addSnapshot({ listingId, ...metrics, notes: notes.trim() || undefined });
-    toast('Snapshot saved', 'positive');
+    await addSnapshot({ listingId, date, ...metrics, notes: notes.trim() || undefined });
+    const n = await countTodayRecords();
+    toast(`已记录快照 · 今天第 ${n} 次`, 'positive');
     setNotes('');
     onClose();
   }
@@ -543,9 +567,14 @@ export function SnapshotModal({
         Every field is optional — record whatever you have. The latest snapshot becomes the listing’s current metrics.
       </p>
       <MetricsGrid value={metrics} onChange={setMetrics} />
-      <Field label="Notes" className="mt-3">
-        <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} />
-      </Field>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <Field label="日期">
+          <DateInput value={date} onChange={setDate} />
+        </Field>
+        <Field label="Notes">
+          <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </Field>
+      </div>
     </Modal>
   );
 }
@@ -567,6 +596,7 @@ export function ReviewModal({
   const toast = useToast();
   const [decision, setDecision] = useState<ReviewDecision>('Keep Current Setup');
   const [note, setNote] = useState('');
+  const [date, setDate] = useState(todayISO());
   const [reviewDays, setReviewDays] = useState<number | null>(settings.defaultReviewIntervalDays);
 
   const [seeded, setSeeded] = useState(false);
@@ -575,6 +605,7 @@ export function ReviewModal({
     setReviewDays(settings.defaultReviewIntervalDays);
     setDecision('Keep Current Setup');
     setNote('');
+    setDate(todayISO());
   }
   if (!open && seeded) setSeeded(false);
 
@@ -586,8 +617,10 @@ export function ReviewModal({
       decision,
       note: note.trim() || undefined,
       nextReviewInDays: reviewDays,
+      date,
     });
-    toast('Review completed', 'positive');
+    const n = await countTodayRecords();
+    toast(`已复盘 · 今天第 ${n} 次`, 'positive');
     onClose();
   }
 
@@ -651,13 +684,18 @@ export function ReviewModal({
         <Field label="Review note">
           <textarea className="input min-h-[60px]" value={note} onChange={(e) => setNote(e.target.value)} />
         </Field>
-        <Field label="Set next review in">
-          <ReviewIntervalPicker
-            value={reviewDays}
-            onChange={setReviewDays}
-            defaultDays={settings.defaultReviewIntervalDays}
-          />
-        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="复盘日期">
+            <DateInput value={date} onChange={setDate} />
+          </Field>
+          <Field label="Set next review in">
+            <ReviewIntervalPicker
+              value={reviewDays}
+              onChange={setReviewDays}
+              defaultDays={settings.defaultReviewIntervalDays}
+            />
+          </Field>
+        </div>
       </div>
     </Modal>
   );

@@ -9,6 +9,7 @@ import React, {
   useState,
 } from 'react';
 import { cx } from '@/lib/util';
+import { todayISO } from '@/lib/date';
 
 // ---------------------------------------------------------------------------
 // Badge
@@ -200,6 +201,35 @@ export function Field({
       {label && <label className="label">{label}</label>}
       {children}
       {hint && <p className="mt-1 text-2xs text-muted">{hint}</p>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Date input with a "Today" shortcut button
+// ---------------------------------------------------------------------------
+
+export function DateInput({
+  value,
+  onChange,
+  todayLabel = '今天',
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  todayLabel?: string;
+}) {
+  const isToday = value === todayISO();
+  return (
+    <div className="flex items-center gap-1">
+      <input type="date" className="input" value={value} onChange={(e) => onChange(e.target.value)} />
+      <button
+        type="button"
+        onClick={() => onChange(todayISO())}
+        className={isToday ? 'btn-primary btn-xs shrink-0' : 'btn-outline btn-xs shrink-0'}
+        title="设为今天"
+      >
+        {todayLabel}
+      </button>
     </div>
   );
 }

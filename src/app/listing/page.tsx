@@ -305,10 +305,12 @@ function TimelineRow({
       return <div className="text-sm">Listing published</div>;
     case 'action': {
       const a = item.action;
+      const cats = a.types && a.types.length ? a.types : [a.type];
       return (
         <div className="group">
           <div className="text-sm">
-            <span className="font-medium">{a.type}</span>
+            <span className="font-medium">调整：</span>
+            <span>{cats.join(' · ')}</span>
             {(a.beforeValue || a.afterValue) && (
               <span className="text-muted">
                 {' '}
@@ -317,6 +319,13 @@ function TimelineRow({
             )}
           </div>
           {a.reason && <div className="text-xs text-muted">{a.reason}</div>}
+          {a.linkUrl && (
+            <div className="text-xs">
+              <a href={a.linkUrl} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                🔗 {a.linkName || a.linkUrl}
+              </a>
+            </div>
+          )}
           {a.reviewDate && <div className="text-2xs text-muted">Review scheduled {formatDate(a.reviewDate)}</div>}
           <button className="text-2xs text-danger opacity-0 group-hover:opacity-100" onClick={() => deleteAction(a.id)}>
             delete

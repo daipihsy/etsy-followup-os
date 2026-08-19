@@ -78,56 +78,55 @@ export async function deleteListing(id: string): Promise<void> {
 export interface NewActionInput {
   listingId: string;
   date?: string;
-  type: ActionType;
-  beforeValue?: string;
-  afterValue?: string;
-  reason?: string;
-  notes?: string;
+  types: ActionType[]; // what was adjusted (multi-select)
+  linkUrl?: string;
+  linkName?: string;
+  reason?: string; // note
   reviewAfterDays?: number | null;
 }
 
 export async function addAction(input: NewActionInput): Promise<Action> {
   const db = getDB();
   const date = input.date || todayISO();
+  const types = input.types.length ? input.types : ['备注/其他'];
   const reviewAfterDays = input.reviewAfterDays ?? null;
   const reviewDate = reviewAfterDays && reviewAfterDays > 0 ? addDays(date, reviewAfterDays) : undefined;
   const action: Action = {
     id: uid('act'),
     listingId: input.listingId,
     date,
-    type: input.type,
-    beforeValue: input.beforeValue,
-    afterValue: input.afterValue,
+    type: types[0],
+    types,
+    linkUrl: input.linkUrl?.trim() || undefined,
+    linkName: input.linkName?.trim() || undefined,
     reason: input.reason,
-    notes: input.notes,
     reviewAfterDays,
     reviewDate,
     createdAt: nowISO(),
   };
   await db.actions.put(action);
 
-  // Side effects: schedule the next review, and reflect a couple of action
-  // types onto the listing itself so the dashboard stays truthful.
+  // Only side effect: schedule the next review.
   const patch: Partial<Listing> = { updatedAt: nowISO() };
   if (reviewDate) patch.nextReviewDate = reviewDate;
-  if (input.type === 'Ads ON') patch.adEnabled = true;
-  if (input.type === 'Ads OFF') patch.adEnabled = false;
-  if (input.type === 'Ads Strategy' && input.afterValue) {
-    const strat = input.afterValue as AdStrategy;
-    if (strat === 'Max Exposure' || strat === 'Efficient Spend' || strat === 'Low Spend') {
-      patch.adStrategy = strat;
-    }
-  }
-  if (input.type === 'Price' && input.afterValue) {
-    const n = Number(input.afterValue.replace(/[^0-9.]/g, ''));
-    if (!isNaN(n)) patch.currentPrice = n;
-  }
   await db.listings.update(input.listingId, patch);
   return action;
 }
 
 export async function deleteAction(id: string): Promise<void> {
   await getDB().actions.delete(id);
+}
+
+/** How many records (actions + snapshots + reviews) were logged today. */
+export async function countTodayRecords(): Promise<number> {
+  const db = getDB();
+  const t = todayISO();
+  const [a, s, r] = await Promise.all([
+    db.actions.where('date').equals(t).count(),
+    db.snapshots.where('date').equals(t).count(),
+    db.reviews.where('date').equals(t).count(),
+  ]);
+  return a + s + r;
 }
 
 // ---------------------------------------------------------------------------

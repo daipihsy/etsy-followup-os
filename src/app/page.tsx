@@ -4,10 +4,10 @@ import { useMemo, useState } from 'react';
 import { PageHeader } from '@/components/AppShell';
 import { AdBadge, AgeBadge, PriorityBadge, StatusBadge } from '@/components/badges';
 import { QuickActions, ListingLink } from '@/components/QuickActions';
-import { EmptyState, Metric, StatCard } from '@/components/ui';
+import { Badge, EmptyState, Metric, StatCard } from '@/components/ui';
 import { useAppData, useQueue, useTodayStats } from '@/hooks/useData';
 import type { DerivedListing } from '@/lib/derive';
-import { agoLabel, formatAge, formatDate, relativeLabel } from '@/lib/date';
+import { agoLabel, formatAge, formatDate, relativeLabel, todayISO } from '@/lib/date';
 import { fmtMoney, fmtNum, fmtPct, fmtRoas } from '@/lib/util';
 
 type FocusKey = 'all' | 'overdue' | 'due' | 'growing' | 'testing' | 'untouched';
@@ -85,10 +85,19 @@ function FollowupCard({ d, currency }: { d: DerivedListing; currency: string }) 
 }
 
 export default function TodayPage() {
-  const { derived, settings, loading } = useAppData();
+  const { derived, settings, loading, actions, snapshots, reviews } = useAppData();
   const queue = useQueue(derived);
   const stats = useTodayStats(derived);
   const [focus, setFocus] = useState<FocusKey>('all');
+
+  const todayCount = useMemo(() => {
+    const t = todayISO();
+    return (
+      actions.filter((a) => a.date === t).length +
+      snapshots.filter((s) => s.date === t).length +
+      reviews.filter((r) => r.date === t).length
+    );
+  }, [actions, snapshots, reviews]);
 
   const filtered = useMemo(() => {
     switch (focus) {
@@ -124,8 +133,11 @@ export default function TodayPage() {
       </div>
 
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-sm font-semibold">
+        <h2 className="text-sm font-semibold flex items-center gap-2">
           Today’s Follow-up Queue <span className="text-muted font-normal">({filtered.length})</span>
+          <Badge tone={todayCount > 0 ? 'positive' : 'neutral'} title="今天记录的动作 / 快照 / 复盘总数">
+            今天已记录 {todayCount} 次
+          </Badge>
         </h2>
         {focus !== 'all' && (
           <button className="btn-ghost btn-xs" onClick={() => setFocus('all')}>
