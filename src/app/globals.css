@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---- Theme tokens (RGB channels, consumed by tailwind.config.ts) ---- */
+:root {
+  --bg: 247 248 250;
+  --surface: 255 255 255;
+  --surface-2: 242 244 247;
+  --border: 224 227 232;
+  --muted: 107 114 128;
+  --fg: 17 24 39;
+  --accent: 79 70 229;
+  --accent-fg: 255 255 255;
+  --positive: 22 163 74;
+  --warning: 217 119 6;
+  --danger: 220 38 38;
+  --info: 2 132 199;
+}
+
+.dark {
+  --bg: 9 11 16;
+  --surface: 20 24 33;
+  --surface-2: 28 33 44;
+  --border: 42 49 63;
+  --muted: 148 158 174;
+  --fg: 233 237 243;
+  --accent: 129 140 248;
+  --accent-fg: 15 18 25;
+  --positive: 74 222 128;
+  --warning: 251 191 36;
+  --danger: 248 113 113;
+  --info: 56 189 248;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: rgb(var(--bg));
+  color: rgb(var(--fg));
+  font-feature-settings: 'tnum' 1, 'cv01' 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Numeric tabular figures for tables/metrics */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Thin, unobtrusive scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--border)) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: rgb(var(--border));
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+/* Focus ring */
+:focus-visible {
+  outline: 2px solid rgb(var(--accent));
+  outline-offset: 1px;
+}
+
+@layer components {
+  .card {
+    @apply bg-surface border border-border rounded-lg;
+  }
+  .input {
+    @apply w-full rounded-md bg-surface border border-border px-2.5 py-1.5 text-sm
+           text-fg placeholder:text-muted focus:border-accent focus:outline-none;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm
+           font-medium transition-colors disabled:opacity-40 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn bg-accent text-accent-fg hover:opacity-90;
+  }
+  .btn-ghost {
+    @apply btn text-fg hover:bg-surface-2 border border-transparent;
+  }
+  .btn-outline {
+    @apply btn border border-border text-fg hover:bg-surface-2;
+  }
+  .btn-danger {
+    @apply btn bg-danger text-white hover:opacity-90;
+  }
+  .btn-xs {
+    @apply px-2 py-1 text-xs gap-1;
+  }
+  .label {
+    @apply block text-xs font-medium text-muted mb-1;
+  }
+  .th {
+    @apply px-3 py-2 text-left text-2xs font-semibold uppercase tracking-wide text-muted select-none;
+  }
+  .td {
+    @apply px-3 py-2 text-sm align-middle;
+  }
+}
