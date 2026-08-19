@@ -35,8 +35,9 @@ export const ACTIVE_STATUSES: ListingStatus[] = LISTING_STATUSES.filter(
   (s) => s !== 'Dropped',
 );
 
-export type AdStrategy = 'Max Exposure' | 'Efficient Spend' | 'Low Spend';
-export const AD_STRATEGIES: AdStrategy[] = ['Max Exposure', 'Efficient Spend', 'Low Spend'];
+// Etsy Ads default listing strategies (matches Etsy's own wording).
+export type AdStrategy = 'Greater visibility' | 'Efficient spending' | 'Lower click cost';
+export const AD_STRATEGIES: AdStrategy[] = ['Greater visibility', 'Efficient spending', 'Lower click cost'];
 
 export type Priority = 1 | 2 | 3 | 4 | 5;
 
@@ -58,6 +59,7 @@ export interface Listing {
   id: string;
   listingName: string;
   etsyUrl?: string;
+  imageUrl?: string; // optional image link shown as a thumbnail
   etsyListingId?: string;
   shopName?: string;
   category?: string;

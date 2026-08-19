@@ -18,7 +18,7 @@ export function BulkBar({
   const [priority, setPriority] = useState<Priority>(3);
   const [tag, setTag] = useState('');
   const [reviewDays, setReviewDays] = useState(3);
-  const [adStrategy, setAdStrategy] = useState<AdStrategy>('Efficient Spend');
+  const [adStrategy, setAdStrategy] = useState<AdStrategy>('Efficient spending');
 
   if (ids.length === 0) return null;
 

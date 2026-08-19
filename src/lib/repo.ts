@@ -34,6 +34,7 @@ export async function createListing(input: NewListingInput): Promise<Listing> {
     id: uid('lst'),
     listingName: input.listingName,
     etsyUrl: input.etsyUrl,
+    imageUrl: input.imageUrl,
     etsyListingId: input.etsyListingId,
     shopName: input.shopName,
     category: input.category,

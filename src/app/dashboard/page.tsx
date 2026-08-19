@@ -230,12 +230,24 @@ export default function DashboardPage() {
                       <input type="checkbox" checked={sel} onChange={() => toggleRow(l.id)} />
                     </td>
                     <td className="td max-w-[15rem]">
-                      <ListingLink id={l.id} className="font-medium hover:text-accent line-clamp-1">
-                        {l.listingName}
-                      </ListingLink>
-                      {l.tags.length > 0 && (
-                        <div className="text-2xs text-muted line-clamp-1">{l.tags.join(' · ')}</div>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {l.imageUrl && (
+                          <img
+                            src={l.imageUrl}
+                            alt=""
+                            className="h-8 w-8 shrink-0 rounded border border-border object-cover"
+                            onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+                          />
+                        )}
+                        <div className="min-w-0">
+                          <ListingLink id={l.id} className="font-medium hover:text-accent line-clamp-1">
+                            {l.listingName}
+                          </ListingLink>
+                          {l.tags.length > 0 && (
+                            <div className="text-2xs text-muted line-clamp-1">{l.tags.join(' · ')}</div>
+                          )}
+                        </div>
+                      </div>
                     </td>
                     <td className="td text-muted">{l.shopName || '—'}</td>
                     <td className="td text-right">{d.age}d</td>

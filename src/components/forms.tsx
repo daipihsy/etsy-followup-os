@@ -164,17 +164,14 @@ export function ListingForm({
   const [form, setForm] = useState(() => ({
     listingName: listing?.listingName ?? '',
     etsyUrl: listing?.etsyUrl ?? '',
-    etsyListingId: listing?.etsyListingId ?? '',
+    imageUrl: listing?.imageUrl ?? '',
     shopName: listing?.shopName ?? settings.defaultShop ?? '',
-    category: listing?.category ?? '',
     publishDate: listing?.publishDate ?? '',
     currentPrice: listing?.currentPrice?.toString() ?? '',
-    discount: listing?.discount?.toString() ?? '',
     adEnabled: listing?.adEnabled ?? false,
-    adStrategy: (listing?.adStrategy ?? 'Max Exposure') as AdStrategy,
+    adStrategy: (listing?.adStrategy ?? 'Greater visibility') as AdStrategy,
     status: listing?.status ?? 'New',
     priority: (listing?.priority ?? 3) as Priority,
-    tags: (listing?.tags ?? []).join(', '),
     notes: listing?.notes ?? '',
   }));
 
@@ -186,17 +183,14 @@ export function ListingForm({
     setForm({
       listingName: listing?.listingName ?? '',
       etsyUrl: listing?.etsyUrl ?? '',
-      etsyListingId: listing?.etsyListingId ?? '',
+      imageUrl: listing?.imageUrl ?? '',
       shopName: listing?.shopName ?? settings.defaultShop ?? '',
-      category: listing?.category ?? '',
       publishDate: listing?.publishDate ?? '',
       currentPrice: listing?.currentPrice?.toString() ?? '',
-      discount: listing?.discount?.toString() ?? '',
       adEnabled: listing?.adEnabled ?? false,
-      adStrategy: (listing?.adStrategy ?? 'Max Exposure') as AdStrategy,
+      adStrategy: (listing?.adStrategy ?? 'Greater visibility') as AdStrategy,
       status: listing?.status ?? 'New',
       priority: (listing?.priority ?? 3) as Priority,
-      tags: (listing?.tags ?? []).join(', '),
       notes: listing?.notes ?? '',
     });
   }
@@ -211,20 +205,14 @@ export function ListingForm({
     const payload = {
       listingName: form.listingName.trim(),
       etsyUrl: form.etsyUrl.trim() || undefined,
-      etsyListingId: form.etsyListingId.trim() || undefined,
+      imageUrl: form.imageUrl.trim() || undefined,
       shopName: form.shopName.trim() || undefined,
-      category: form.category.trim() || undefined,
       publishDate: form.publishDate || undefined,
       currentPrice: parseNum(form.currentPrice),
-      discount: parseNum(form.discount),
       adEnabled: form.adEnabled,
       adStrategy: form.adEnabled ? form.adStrategy : undefined,
       status: form.status,
       priority: form.priority,
-      tags: form.tags
-        .split(',')
-        .map((t) => t.trim())
-        .filter(Boolean),
       notes: form.notes.trim() || undefined,
     };
     if (editing && listing) {
@@ -268,23 +256,28 @@ export function ListingForm({
           <Field label="Shop">
             <input className="input" value={form.shopName} onChange={(e) => set({ shopName: e.target.value })} />
           </Field>
-          <Field label="Category">
-            <input className="input" value={form.category} onChange={(e) => set({ category: e.target.value })} />
-          </Field>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
           <Field label="Etsy URL">
             <input className="input" value={form.etsyUrl} onChange={(e) => set({ etsyUrl: e.target.value })} />
           </Field>
-          <Field label="Etsy Listing ID">
-            <input
-              className="input"
-              value={form.etsyListingId}
-              onChange={(e) => set({ etsyListingId: e.target.value })}
-            />
-          </Field>
         </div>
-        <div className="grid grid-cols-3 gap-3">
+        <Field label="图片链接 (Image URL)" hint="贴一张图片的链接，会显示成缩略图">
+          <input
+            className="input"
+            value={form.imageUrl}
+            onChange={(e) => set({ imageUrl: e.target.value })}
+            placeholder="https://…/main.jpg"
+          />
+        </Field>
+        {form.imageUrl.trim() && (
+          <img
+            src={form.imageUrl.trim()}
+            alt="preview"
+            className="h-24 w-24 rounded-md border border-border object-cover"
+            onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+            onLoad={(e) => ((e.target as HTMLImageElement).style.display = '')}
+          />
+        )}
+        <div className="grid grid-cols-2 gap-3">
           <Field label="Publish Date" hint="Drives Listing Age">
             <input
               type="date"
@@ -300,15 +293,6 @@ export function ListingForm({
               className="input"
               value={form.currentPrice}
               onChange={(e) => set({ currentPrice: e.target.value })}
-            />
-          </Field>
-          <Field label="Discount %">
-            <input
-              type="number"
-              step="1"
-              className="input"
-              value={form.discount}
-              onChange={(e) => set({ discount: e.target.value })}
             />
           </Field>
         </div>
@@ -361,9 +345,6 @@ export function ListingForm({
             </select>
           </Field>
         </div>
-        <Field label="Tags" hint="Comma separated">
-          <input className="input" value={form.tags} onChange={(e) => set({ tags: e.target.value })} />
-        </Field>
         <Field label="Notes">
           <textarea
             className="input min-h-[70px]"

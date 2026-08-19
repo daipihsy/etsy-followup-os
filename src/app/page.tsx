@@ -20,14 +20,22 @@ function FollowupCard({ d, currency }: { d: DerivedListing; currency: string }) 
   return (
     <div className="card p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <ListingLink id={l.id} className="text-base font-semibold hover:text-accent">
-            {l.listingName}
-          </ListingLink>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">
-            <span>{l.shopName || '—'}</span>
-            <span>·</span>
-            <span>{l.category || 'Uncategorized'}</span>
+        <div className="flex min-w-0 gap-3">
+          {l.imageUrl && (
+            <img
+              src={l.imageUrl}
+              alt={l.listingName}
+              className="h-12 w-12 shrink-0 rounded-md border border-border object-cover"
+              onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+            />
+          )}
+          <div className="min-w-0">
+            <ListingLink id={l.id} className="text-base font-semibold hover:text-accent">
+              {l.listingName}
+            </ListingLink>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+              <span>{l.shopName || '—'}</span>
+            </div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">

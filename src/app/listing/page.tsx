@@ -103,7 +103,16 @@ function DetailInner() {
       {/* Header */}
       <div className="card p-4 mb-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="flex min-w-0 gap-3">
+            {l.imageUrl && (
+              <img
+                src={l.imageUrl}
+                alt={l.listingName}
+                className="h-16 w-16 shrink-0 rounded-md border border-border object-cover"
+                onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+              />
+            )}
+            <div className="min-w-0">
             <h1 className="text-xl font-semibold">{l.listingName}</h1>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
               <span>{l.shopName || '—'}</span>
@@ -123,6 +132,7 @@ function DetailInner() {
                   <span>{fmtMoney(l.currentPrice, settings.currency)}</span>
                 </>
               )}
+            </div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
