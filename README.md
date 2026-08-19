@@ -127,6 +127,25 @@ It contains every listing, action, snapshot, experiment, review, saved filter, a
 
 ---
 
+## Cross-device sync (GitHub)
+
+Because the app's data lives in the browser (not in this repo), simply hosting the site does **not** carry your listings to another device. To get Obsidian-style sync, the app can mirror its whole database as a single JSON file in a **private GitHub repo** via the GitHub Contents API.
+
+**Settings → Cloud Sync (GitHub):**
+
+1. Create a **separate private repo** to hold the data (e.g. `etsy-followup-data`). Keep it private — it holds your actual listing data.
+2. Create a **fine-grained Personal Access Token** at <https://github.com/settings/tokens?type=beta>, scoped to **only that data repo**, with **Repository permissions → Contents: Read and write**.
+3. In the app, fill in **Owner**, **Data repo**, **Branch** (`main`), **File path** (`etsy-followup-data.json`), and paste the **token**, then **Save**.
+4. Use **Test connection**, then **Push now →** to upload. On another device, open the site, enter the same settings, and **Pull (replace)**.
+5. Turn on **Auto-sync** to pull on open and push (debounced) after each change.
+
+Notes:
+- The token is stored **only in that browser's localStorage** and is sent only to `api.github.com` in the `Authorization` header — never in a URL, never to any other host.
+- Sync is **last-writer-wins**. Edit on one device at a time; whichever device pushes last wins. Keep occasional JSON exports as a hard backup.
+- Because the hosting site is public but the **data repo is private and requires your token**, your business data stays private.
+
+---
+
 ## Core concepts
 
 - **Listing Age** is computed from `publishDate` and bucketed into **New (0–7d), Early (8–14d), Growing (15–30d), Mature (30+d)**.
@@ -176,8 +195,8 @@ By design, this version deliberately does **not** include:
 
 - Etsy API, order sync, or any automatic metric import (metrics are entered by hand via snapshots).
 - Automatic price/ads changes or auto-optimization — the app records and reminds; **you make the operational calls**.
-- Accounts, authentication, cloud sync, or multi-user/collaboration.
-- Cross-device sync — data is local to one browser (use JSON export/import to move it).
+- Accounts, server-side authentication, or multi-user/collaboration.
+- Real-time collaboration / merge — cross-device sync (see above) is last-writer-wins, meant for a single person switching devices, not simultaneous editors.
 - Server-side anything — it's a fully static site.
 
 These may come later. V1 is focused on doing one thing well: keeping a whole pool of listings under continuous, deliberate follow-up.

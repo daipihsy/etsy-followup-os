@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { PageHeader } from '@/components/AppShell';
+import { SyncPanel } from '@/components/SyncManager';
 import { ConfirmButton, Field, useToast } from '@/components/ui';
 import { loadDemoData } from '@/lib/demo';
 import { getDB } from '@/lib/db';
@@ -161,6 +162,9 @@ export default function SettingsPage() {
           </Field>
         </div>
       </section>
+
+      {/* Cloud Sync */}
+      <SyncPanel />
 
       {/* Data */}
       <section className="card p-4 mb-4">

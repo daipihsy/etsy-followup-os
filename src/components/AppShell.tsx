@@ -9,6 +9,7 @@ import { loadDemoData } from '@/lib/demo';
 import { updateSettings } from '@/lib/repo';
 import { cx } from '@/lib/util';
 import { NewListingButton } from './forms';
+import { SyncManager } from './SyncManager';
 import { ToastProvider, useToast } from './ui';
 
 const NAV = [
@@ -113,6 +114,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="px-2 py-3 border-t border-border space-y-1">
+          <SyncManager />
           <ThemeToggle />
         </div>
       </aside>
