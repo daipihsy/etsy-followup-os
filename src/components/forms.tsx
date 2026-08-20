@@ -28,7 +28,8 @@ import {
   type Priority,
   type ReviewDecision,
 } from '@/lib/types';
-import { cx, fmtDiff, fmtNum, parseNum } from '@/lib/util';
+import { cx, fmtDiff, fmtNum, fmtPct, parseNum } from '@/lib/util';
+import { computeCtr, computeCvr } from '@/lib/metrics';
 import { DateInput, Field, Modal, Segmented, useToast } from './ui';
 import { useLang } from './lang';
 import type { DerivedListing } from '@/lib/derive';
@@ -108,41 +109,60 @@ function ReviewIntervalPicker({
 }
 
 // ---------------------------------------------------------------------------
-// Metrics grid input (shared by Snapshot + Experiment conclude)
+// Metrics input (shared by Snapshot + Experiment conclude).
+// You only type the RAW numbers Etsy shows you; CTR & CVR are auto-computed.
 // ---------------------------------------------------------------------------
 
-const METRIC_FIELDS: { key: keyof Metrics; label: string; step?: string }[] = [
-  { key: 'views', label: 'Views' },
-  { key: 'visits', label: 'Visits' },
-  { key: 'ctr', label: 'CTR %', step: '0.01' },
-  { key: 'cvr', label: 'CVR %', step: '0.01' },
-  { key: 'orders', label: 'Orders' },
-  { key: 'revenue', label: 'Revenue', step: '0.01' },
-  { key: 'adSpend', label: 'Ad Spend', step: '0.01' },
-  { key: 'roas', label: 'ROAS', step: '0.01' },
-  { key: 'favorites', label: 'Favorites' },
+const RAW_FIELDS: { key: keyof Metrics; label: string; hint: string; step?: string }[] = [
+  { key: 'views', label: 'Views', hint: 'From Etsy Ads “Views”' },
+  { key: 'clicks', label: 'Clicks', hint: 'From Etsy Ads “Clicks”' },
+  { key: 'visits', label: 'Visits', hint: 'From Shop Stats “Visits” (optional)' },
+  { key: 'orders', label: 'Orders', hint: 'Orders / Items sold' },
+  { key: 'revenue', label: 'Revenue', hint: 'Total revenue', step: '0.01' },
+  { key: 'adSpend', label: 'Ad Spend', hint: 'From Etsy Ads “Spend”', step: '0.01' },
+  { key: 'roas', label: 'ROAS', hint: 'Copy from Etsy Ads if shown', step: '0.01' },
+  { key: 'favorites', label: 'Favorites', hint: 'Optional' },
 ];
 
-function MetricsGrid({
-  value,
-  onChange,
-}: {
-  value: Metrics;
-  onChange: (m: Metrics) => void;
-}) {
+function MetricsInput({ value, onChange }: { value: Metrics; onChange: (m: Metrics) => void }) {
+  const { t } = useLang();
+  function setRaw(key: keyof Metrics, raw: string) {
+    const next: Metrics = { ...value, [key]: parseNum(raw) };
+    // CTR / CVR are always derived from the raw counts.
+    next.ctr = computeCtr(next);
+    next.cvr = computeCvr(next);
+    onChange(next);
+  }
+  const ctr = computeCtr(value);
+  const cvr = computeCvr(value);
   return (
-    <div className="grid grid-cols-3 gap-2">
-      {METRIC_FIELDS.map((f) => (
-        <Field key={f.key} label={f.label}>
-          <input
-            type="number"
-            step={f.step ?? '1'}
-            className="input"
-            value={value[f.key] ?? ''}
-            onChange={(e) => onChange({ ...value, [f.key]: parseNum(e.target.value) })}
-          />
-        </Field>
-      ))}
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {RAW_FIELDS.map((f) => (
+          <Field key={f.key} label={t(f.label)} hint={t(f.hint)}>
+            <input
+              type="number"
+              step={f.step ?? '1'}
+              className="input"
+              value={value[f.key] ?? ''}
+              onChange={(e) => setRaw(f.key, e.target.value)}
+            />
+          </Field>
+        ))}
+      </div>
+      <div className="rounded-md border border-accent/30 bg-accent/5 p-2.5">
+        <div className="text-2xs uppercase tracking-wide text-muted mb-1.5">{t('Auto-computed')}</div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <div className="text-xs text-muted">CTR · {t('Auto = Clicks ÷ Views')}</div>
+            <div className="text-lg font-semibold tnum">{fmtPct(ctr)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted">CVR · {t('Auto = Orders ÷ Visits (or Clicks)')}</div>
+            <div className="text-lg font-semibold tnum">{fmtPct(cvr)}</div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -622,6 +642,7 @@ export function SnapshotModal({
   prefill?: Metrics;
 }) {
   const toast = useToast();
+  const { t } = useLang();
   const [metrics, setMetrics] = useState<Metrics>(prefill ?? {});
   const [notes, setNotes] = useState('');
   const [date, setDate] = useState(todayISO());
@@ -647,27 +668,27 @@ export function SnapshotModal({
       open={open}
       onClose={onClose}
       wide
-      title={`Add Snapshot${listingName ? ` — ${listingName}` : ''}`}
+      title={`${t('Add Snapshot')}${listingName ? ` — ${listingName}` : ''}`}
       footer={
         <>
           <button className="btn-outline" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </button>
           <button className="btn-primary" onClick={submit}>
-            Save Snapshot
+            {t('Save Snapshot')}
           </button>
         </>
       }
     >
       <p className="mb-3 text-xs text-muted">
-        Every field is optional — record whatever you have. The latest snapshot becomes the listing’s current metrics.
+        {t('Just copy the numbers Etsy shows you — every field is optional. CTR and CVR are calculated for you.')}
       </p>
-      <MetricsGrid value={metrics} onChange={setMetrics} />
+      <MetricsInput value={metrics} onChange={setMetrics} />
       <div className="mt-3 grid grid-cols-2 gap-3">
-        <Field label="日期">
+        <Field label={t('Date')}>
           <DateInput value={date} onChange={setDate} />
         </Field>
-        <Field label="Notes">
+        <Field label={t('Notes')}>
           <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
       </div>
@@ -994,7 +1015,7 @@ export function ConcludeExperimentModal({
       <div className="space-y-4">
         <div>
           <div className="label">After metrics</div>
-          <MetricsGrid value={after} onChange={setAfter} />
+          <MetricsInput value={after} onChange={setAfter} />
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

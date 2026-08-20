@@ -45,9 +45,10 @@ export type Priority = 1 | 2 | 3 | 4 | 5;
 // so a snapshot can be logged in seconds without filling everything in.
 export interface Metrics {
   views?: number;
+  clicks?: number; // ad clicks (Etsy Ads "Clicks")
   visits?: number;
-  ctr?: number; // percentage, e.g. 3.4 means 3.4%
-  cvr?: number; // percentage
+  ctr?: number; // percentage, e.g. 3.4 means 3.4% (auto-computed from clicks/views)
+  cvr?: number; // percentage (auto-computed from orders/visits or orders/clicks)
   orders?: number;
   revenue?: number;
   adSpend?: number;
@@ -107,6 +108,7 @@ export interface Snapshot {
   listingId: string;
   date: string; // ISO date
   views?: number;
+  clicks?: number;
   visits?: number;
   ctr?: number;
   cvr?: number;

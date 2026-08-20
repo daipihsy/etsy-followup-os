@@ -148,6 +148,7 @@ export async function addSnapshot(input: NewSnapshotInput): Promise<Snapshot> {
     listingId: input.listingId,
     date,
     views: input.views,
+    clicks: input.clicks,
     visits: input.visits,
     ctr: input.ctr,
     cvr: input.cvr,
@@ -170,6 +171,7 @@ export async function addSnapshot(input: NewSnapshotInput): Promise<Snapshot> {
   if (latest) {
     const metrics: Metrics = {
       views: latest.views,
+      clicks: latest.clicks,
       visits: latest.visits,
       ctr: latest.ctr,
       cvr: latest.cvr,

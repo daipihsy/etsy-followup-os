@@ -164,6 +164,29 @@ export const ZH: Record<string, string> = {
   Snapshot: '快照',
   Review: '复盘',
 
+  // Snapshot / metrics input
+  'Add Snapshot': '记录快照',
+  'Save Snapshot': '保存快照',
+  Date: '日期',
+  'Just copy the numbers Etsy shows you — every field is optional. CTR and CVR are calculated for you.':
+    '把 Etsy 上看到的数字抄进来即可,每项都可留空;CTR、CVR 会自动帮你算好。',
+  Views: '曝光 Views',
+  Clicks: '点击 Clicks',
+  Visits: '访问 Visits',
+  'Ad Spend': '广告花费 Spend',
+  Favorites: '收藏',
+  'From Etsy Ads “Views”': '广告页的 "Views"(展示)',
+  'From Etsy Ads “Clicks”': '广告页的 "Clicks"',
+  'From Shop Stats “Visits” (optional)': '店铺 Stats 的 "Visits"(可留空)',
+  'Orders / Items sold': '订单 / Items sold',
+  'Total revenue': '总营收',
+  'From Etsy Ads “Spend”': '广告页的 "Spend"',
+  'Copy from Etsy Ads if shown': '广告页直接给了就抄,没有留空',
+  Optional: '可留空',
+  'Auto-computed': '自动算出',
+  'Auto = Clicks ÷ Views': '自动 = 点击 ÷ 曝光',
+  'Auto = Orders ÷ Visits (or Clicks)': '自动 = 订单 ÷ 访问(或点击)',
+
   // Statuses (badge display)
   Signal: '信号',
   Scale: '放量',
