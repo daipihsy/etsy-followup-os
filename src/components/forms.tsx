@@ -3,11 +3,12 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useRef, useState } from 'react';
 import { getDB } from '@/lib/db';
-import { addAction, countTodayRecords, createListing, updateAction, updateListing } from '@/lib/repo';
+import { addAction, addSnapshot, countTodayRecords, createListing, updateAction, updateListing } from '@/lib/repo';
 import { imageFileToDataUrl, extractImageFile } from '@/lib/image';
-import { ACTION_TYPES, type Action, type Listing } from '@/lib/types';
+import { computeCtr, computeCvr } from '@/lib/metrics';
+import { ACTION_TYPES, type Action, type Listing, type Metrics } from '@/lib/types';
 import { todayISO } from '@/lib/date';
-import { cx } from '@/lib/util';
+import { cx, fmtPct, parseNum } from '@/lib/util';
 import { DateInput, Field, Modal, useToast } from './ui';
 import { useLang } from './lang';
 
@@ -411,6 +412,195 @@ export function RecordButton({ listingId, className = 'btn-primary btn-xs' }: { 
         + {t('Record')}
       </button>
       <EntryModal open={open} onClose={() => setOpen(false)} fixedListingId={listingId} />
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Metrics input — type the raw numbers Etsy shows; CTR & CVR auto-compute.
+// ---------------------------------------------------------------------------
+
+const RAW_FIELDS: { key: keyof Metrics; label: string; hint: string; step?: string }[] = [
+  { key: 'views', label: 'Views', hint: 'From Etsy Ads “Views”' },
+  { key: 'clicks', label: 'Clicks', hint: 'From Etsy Ads “Clicks”' },
+  { key: 'visits', label: 'Visits', hint: 'From Shop Stats “Visits” (optional)' },
+  { key: 'orders', label: 'Orders', hint: 'Orders / Items sold' },
+  { key: 'revenue', label: 'Revenue', hint: 'Total revenue', step: '0.01' },
+  { key: 'adSpend', label: 'Ad Spend', hint: 'From Etsy Ads “Spend”', step: '0.01' },
+  { key: 'roas', label: 'ROAS', hint: 'Copy from Etsy Ads if shown', step: '0.01' },
+  { key: 'favorites', label: 'Favorites', hint: 'Optional' },
+];
+
+function MetricsInput({ value, onChange }: { value: Metrics; onChange: (m: Metrics) => void }) {
+  const { t } = useLang();
+  function setRaw(key: keyof Metrics, raw: string) {
+    const next: Metrics = { ...value, [key]: parseNum(raw) };
+    next.ctr = computeCtr(next);
+    next.cvr = computeCvr(next);
+    onChange(next);
+  }
+  const ctr = computeCtr(value);
+  const cvr = computeCvr(value);
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {RAW_FIELDS.map((f) => (
+          <Field key={f.key} label={t(f.label)} hint={t(f.hint)}>
+            <input
+              type="number"
+              step={f.step ?? '1'}
+              className="input"
+              value={value[f.key] ?? ''}
+              onChange={(e) => setRaw(f.key, e.target.value)}
+            />
+          </Field>
+        ))}
+      </div>
+      <div className="rounded-md border border-accent/30 bg-accent/5 p-2.5">
+        <div className="text-2xs uppercase tracking-wide text-muted mb-1.5">{t('Auto-computed')}</div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <div className="text-xs text-muted">CTR · {t('Auto = Clicks ÷ Views')}</div>
+            <div className="text-lg font-semibold tnum">{fmtPct(ctr)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted">CVR · {t('Auto = Orders ÷ Visits (or Clicks)')}</div>
+            <div className="text-lg font-semibold tnum">{fmtPct(cvr)}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Data (metrics) modal.
+// ---------------------------------------------------------------------------
+
+export function DataModal({
+  open,
+  onClose,
+  fixedListingId,
+}: {
+  open: boolean;
+  onClose: () => void;
+  fixedListingId?: string;
+}) {
+  const toast = useToast();
+  const { t } = useLang();
+  const listings = useLiveQuery(() => getDB().listings.orderBy('updatedAt').reverse().toArray(), [], [] as Listing[]);
+  const [listingId, setListingId] = useState('');
+  const [metrics, setMetrics] = useState<Metrics>({});
+  const [note, setNote] = useState('');
+  const [date, setDate] = useState(todayISO());
+  const [showNew, setShowNew] = useState(false);
+
+  const key = fixedListingId ?? 'global';
+  const [lastKey, setLastKey] = useState<string | null>(null);
+  if (open && key !== lastKey) {
+    setLastKey(key);
+    setListingId(fixedListingId ?? '');
+    setMetrics({});
+    setNote('');
+    setDate(todayISO());
+  }
+  if (!open && lastKey !== null) setLastKey(null);
+
+  async function submit() {
+    const lid = fixedListingId ?? listingId;
+    if (!lid) {
+      toast(t('Pick a listing first'), 'danger');
+      return;
+    }
+    await addSnapshot({ listingId: lid, date, ...metrics, notes: note.trim() || undefined });
+    const n = await countTodayRecords();
+    toast(`${t('Recorded')} · ${t('#{n} today').replace('{n}', String(n))}`, 'positive');
+    onClose();
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      wide
+      title={t('Record data')}
+      footer={
+        <>
+          <button className="btn-outline" onClick={onClose}>
+            {t('Cancel')}
+          </button>
+          <button className="btn-primary" onClick={submit}>
+            {t('Record')}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        {!fixedListingId && (
+          <Field label={t('Listing')}>
+            <div className="flex gap-2">
+              <select className="input" value={listingId} onChange={(e) => setListingId(e.target.value)}>
+                <option value="">{t('— select —')}</option>
+                {(listings ?? []).map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.listingName}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="btn-outline shrink-0" onClick={() => setShowNew(true)}>
+                + {t('New')}
+              </button>
+            </div>
+          </Field>
+        )}
+        <p className="text-xs text-muted">{t('Just copy the numbers Etsy shows you — every field is optional. CTR and CVR are calculated for you.')}</p>
+        <MetricsInput value={metrics} onChange={setMetrics} />
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={t('Date')}>
+            <DateInput value={date} onChange={setDate} />
+          </Field>
+          <Field label={t('Note')}>
+            <input className="input" value={note} onChange={(e) => setNote(e.target.value)} />
+          </Field>
+        </div>
+      </div>
+
+      <ListingForm
+        open={showNew}
+        onClose={() => setShowNew(false)}
+        onCreated={(l) => {
+          setListingId(l.id);
+          setShowNew(false);
+        }}
+      />
+    </Modal>
+  );
+}
+
+/** Global "+ Data" button (no preselected listing). */
+export function AddDataButton({ className = 'btn-outline' }: { className?: string }) {
+  const [open, setOpen] = useState(false);
+  const { t } = useLang();
+  return (
+    <>
+      <button className={className} onClick={() => setOpen(true)}>
+        + {t('Data')}
+      </button>
+      <DataModal open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
+/** "+ Data" button bound to one listing. */
+export function RecordDataButton({ listingId, className = 'btn-outline btn-xs' }: { listingId: string; className?: string }) {
+  const [open, setOpen] = useState(false);
+  const { t } = useLang();
+  return (
+    <>
+      <button className={className} onClick={() => setOpen(true)}>
+        + {t('Data')}
+      </button>
+      <DataModal open={open} onClose={() => setOpen(false)} fixedListingId={listingId} />
     </>
   );
 }

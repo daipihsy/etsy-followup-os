@@ -4,12 +4,13 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { EntryCard } from '@/components/EntryCard';
-import { ListingForm, RecordButton } from '@/components/forms';
+import { DataTable } from '@/components/DataViews';
+import { ListingForm, RecordButton, RecordDataButton } from '@/components/forms';
 import { ConfirmButton, EmptyState } from '@/components/ui';
 import { useLang } from '@/components/lang';
 import { getDB } from '@/lib/db';
 import { deleteListing } from '@/lib/repo';
-import type { Action } from '@/lib/types';
+import type { Action, Snapshot } from '@/lib/types';
 
 function DetailInner() {
   const params = useSearchParams();
@@ -23,6 +24,11 @@ function DetailInner() {
     () => (id ? getDB().actions.where('listingId').equals(id).toArray() : []),
     [id],
     [] as Action[],
+  );
+  const snapshots = useLiveQuery(
+    () => (id ? getDB().snapshots.where('listingId').equals(id).toArray() : []),
+    [id],
+    [] as Snapshot[],
   );
 
   const sorted = [...(actions ?? [])].sort((a, b) =>
@@ -72,6 +78,7 @@ function DetailInner() {
         </div>
         <div className="mt-3 flex items-center gap-2">
           <RecordButton listingId={listing.id} />
+          <RecordDataButton listingId={listing.id} />
           <ConfirmButton
             className="btn-ghost btn-xs text-danger ml-auto"
             title={t('Delete listing')}
@@ -87,6 +94,13 @@ function DetailInner() {
           </ConfirmButton>
         </div>
       </div>
+
+      {(snapshots ?? []).length > 0 && (
+        <div className="mb-6">
+          <h2 className="mb-2 text-sm font-semibold">{t('Numbers over time')}</h2>
+          <DataTable snapshots={snapshots ?? []} />
+        </div>
+      )}
 
       <h2 className="mb-2 text-sm font-semibold">{t('Change history')}</h2>
       {sorted.length === 0 ? (

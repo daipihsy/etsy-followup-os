@@ -23,6 +23,30 @@ export function ListingLink({
   );
 }
 
+/** Delete-with-confirm control (no edit) — used for data rows. */
+export function EntryActions0({ onDelete }: { onDelete: () => void }) {
+  const { t } = useLang();
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <span className="inline-flex items-center gap-2 text-2xs">
+      {confirming ? (
+        <>
+          <button className="text-danger font-medium" onClick={onDelete}>
+            {t('Delete?')}
+          </button>
+          <button className="text-muted" onClick={() => setConfirming(false)}>
+            {t('Cancel')}
+          </button>
+        </>
+      ) : (
+        <button className="text-muted hover:text-danger" onClick={() => setConfirming(true)}>
+          {t('Delete')}
+        </button>
+      )}
+    </span>
+  );
+}
+
 /** Small edit / delete controls for one journal entry. */
 export function EntryActions({ action }: { action: Action }) {
   const { t } = useLang();

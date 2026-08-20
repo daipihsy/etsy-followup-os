@@ -221,9 +221,15 @@ export const ZH: Record<string, string> = {
   // ---- Simplified journal app ----
   Journal: '日志',
   'My Listings': '我的链接',
-  'What you changed, day by day.': '你每天改了什么,一目了然。',
+  'What you changed and your numbers, day by day.': '你每天改了什么、数据怎么变,一目了然。',
   'Nothing logged yet': '还没有记录',
-  'Tap “Record” to note what you changed on a listing today.': '点"记录",记下今天改了哪个链接的什么。',
+  'Tap “Record” to note a change, or “Data” to enter today’s numbers.': '点"记录"记改动,或"数据"填今天的数字。',
+
+  // Data
+  Data: '数据',
+  'Record data': '记录数据',
+  'Numbers over time': '数据变化',
+  '(no numbers)': '(没填数字)',
 
   // Listing form
   Add: '添加',
