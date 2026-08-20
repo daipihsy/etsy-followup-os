@@ -1,6 +1,7 @@
 'use client';
 
 import { Badge, type BadgeTone } from './ui';
+import { useLang } from './lang';
 import type { AgeStage } from '@/lib/date';
 import type { ExperimentStatus, ListingStatus, Priority } from '@/lib/types';
 
@@ -18,7 +19,8 @@ const STATUS_TONE: Record<ListingStatus, BadgeTone> = {
 };
 
 export function StatusBadge({ status }: { status: ListingStatus }) {
-  return <Badge tone={STATUS_TONE[status]}>{status}</Badge>;
+  const { t } = useLang();
+  return <Badge tone={STATUS_TONE[status]}>{t(status)}</Badge>;
 }
 
 const PRIORITY_TONE: Record<Priority, BadgeTone> = {
@@ -45,18 +47,20 @@ const AGE_TONE: Record<AgeStage, BadgeTone> = {
 };
 
 export function AgeBadge({ stage, days }: { stage: AgeStage; days: number }) {
+  const { t } = useLang();
   return (
     <Badge tone={AGE_TONE[stage]} title={`${stage} stage`}>
-      {days}d · {stage}
+      {days}d · {t(stage)}
     </Badge>
   );
 }
 
 export function AdBadge({ enabled, strategy }: { enabled: boolean; strategy?: string }) {
-  if (!enabled) return <Badge tone="neutral">Ads off</Badge>;
+  const { t } = useLang();
+  if (!enabled) return <Badge tone="neutral">{t('Ads off')}</Badge>;
   return (
     <Badge tone="info" title={strategy}>
-      Ads · {strategy ?? 'on'}
+      {t('Ads')} · {strategy ?? 'on'}
     </Badge>
   );
 }
@@ -71,5 +75,6 @@ const EXP_TONE: Record<ExperimentStatus, BadgeTone> = {
 };
 
 export function ExperimentBadge({ status }: { status: ExperimentStatus }) {
-  return <Badge tone={EXP_TONE[status]}>{status}</Badge>;
+  const { t } = useLang();
+  return <Badge tone={EXP_TONE[status]}>{t(status)}</Badge>;
 }

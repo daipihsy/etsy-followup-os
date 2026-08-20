@@ -1,7 +1,8 @@
 'use client';
 
 import { useLiveQuery } from 'dexie-react-hooks';
-import React, { useMemo, useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { imageFileToDataUrl, extractImageFile } from '@/lib/image';
 import { getDB, DEFAULT_SETTINGS } from '@/lib/db';
 import {
   addAction,
@@ -27,8 +28,9 @@ import {
   type Priority,
   type ReviewDecision,
 } from '@/lib/types';
-import { fmtDiff, fmtNum, parseNum } from '@/lib/util';
+import { cx, fmtDiff, fmtNum, parseNum } from '@/lib/util';
 import { DateInput, Field, Modal, Segmented, useToast } from './ui';
+import { useLang } from './lang';
 import type { DerivedListing } from '@/lib/derive';
 
 function useSettings() {
@@ -146,6 +148,122 @@ function MetricsGrid({
 }
 
 // ---------------------------------------------------------------------------
+// Image picker — drag / paste / click to upload (stored as a compact data URL),
+// or paste an image URL.
+// ---------------------------------------------------------------------------
+
+function ImagePicker({
+  value,
+  onChange,
+  label,
+  hint,
+  urlPlaceholder,
+  busyText,
+  dropText,
+  removeText,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  label: string;
+  hint: string;
+  urlPlaceholder: string;
+  busyText: string;
+  dropText: string;
+  removeText: string;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [drag, setDrag] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+
+  async function handleFile(file: File) {
+    setBusy(true);
+    try {
+      const url = await imageFileToDataUrl(file);
+      onChange(url);
+    } catch {
+      toast('无法读取该图片', 'danger');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Field label={label} hint={hint}>
+      <div
+        tabIndex={0}
+        onClick={() => fileRef.current?.click()}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDrag(true);
+        }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDrag(false);
+          const f = extractImageFile(e.dataTransfer);
+          if (f) handleFile(f);
+        }}
+        onPaste={(e) => {
+          const f = extractImageFile(e.clipboardData);
+          if (f) {
+            e.preventDefault();
+            handleFile(f);
+          }
+        }}
+        className={cx(
+          'flex items-center gap-3 rounded-md border border-dashed p-3 cursor-pointer focus:outline-none',
+          drag ? 'border-accent bg-accent/5' : 'border-border',
+        )}
+      >
+        {value ? (
+          <img
+            src={value}
+            alt="preview"
+            className="h-16 w-16 shrink-0 rounded object-cover border border-border"
+            onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+          />
+        ) : (
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded bg-surface-2 text-2xl text-muted">
+            🖼
+          </div>
+        )}
+        <div className="text-xs text-muted">{busy ? busyText : dropText}</div>
+        {value && (
+          <button
+            type="button"
+            className="btn-ghost btn-xs text-danger ml-auto"
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange('');
+            }}
+          >
+            {removeText}
+          </button>
+        )}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            if (f) handleFile(f);
+          }}
+        />
+      </div>
+      <input
+        className="input mt-2"
+        value={value.startsWith('data:') ? '' : value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={urlPlaceholder}
+      />
+    </Field>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Listing create / edit
 // ---------------------------------------------------------------------------
 
@@ -160,6 +278,7 @@ export function ListingForm({
 }) {
   const settings = useSettings();
   const toast = useToast();
+  const { t } = useLang();
   const editing = !!listing;
   const [form, setForm] = useState(() => ({
     listingName: listing?.listingName ?? '',
@@ -230,20 +349,20 @@ export function ListingForm({
       open={open}
       onClose={onClose}
       wide
-      title={editing ? 'Edit Listing' : 'New Listing'}
+      title={editing ? t('Edit Listing') : t('New Listing')}
       footer={
         <>
           <button className="btn-outline" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </button>
           <button className="btn-primary" onClick={submit}>
-            {editing ? 'Save' : 'Add Listing'}
+            {editing ? t('Save') : t('Add Listing')}
           </button>
         </>
       }
     >
       <div className="space-y-3">
-        <Field label="Listing Name *">
+        <Field label={t('Listing Name *')}>
           <input
             className="input"
             autoFocus
@@ -253,32 +372,25 @@ export function ListingForm({
           />
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Shop">
+          <Field label={t('Shop')}>
             <input className="input" value={form.shopName} onChange={(e) => set({ shopName: e.target.value })} />
           </Field>
-          <Field label="Etsy URL">
+          <Field label={t('Etsy URL')}>
             <input className="input" value={form.etsyUrl} onChange={(e) => set({ etsyUrl: e.target.value })} />
           </Field>
         </div>
-        <Field label="图片链接 (Image URL)" hint="贴一张图片的链接，会显示成缩略图">
-          <input
-            className="input"
-            value={form.imageUrl}
-            onChange={(e) => set({ imageUrl: e.target.value })}
-            placeholder="https://…/main.jpg"
-          />
-        </Field>
-        {form.imageUrl.trim() && (
-          <img
-            src={form.imageUrl.trim()}
-            alt="preview"
-            className="h-24 w-24 rounded-md border border-border object-cover"
-            onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
-            onLoad={(e) => ((e.target as HTMLImageElement).style.display = '')}
-          />
-        )}
+        <ImagePicker
+          value={form.imageUrl}
+          onChange={(v) => set({ imageUrl: v })}
+          label={t('图片 (Image)')}
+          hint={t('拖入 / 粘贴 / 点击上传,或在下方粘贴图片链接')}
+          urlPlaceholder={t('或粘贴图片链接 https://…')}
+          busyText={t('处理中…')}
+          dropText={t('拖入图片 / 粘贴 (Ctrl+V) / 点击上传')}
+          removeText={t('移除')}
+        />
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Publish Date" hint="Drives Listing Age">
+          <Field label={t('Publish Date')} hint={t('Drives Listing Age')}>
             <input
               type="date"
               className="input"
@@ -286,7 +398,7 @@ export function ListingForm({
               onChange={(e) => set({ publishDate: e.target.value })}
             />
           </Field>
-          <Field label="Price">
+          <Field label={t('Price')}>
             <input
               type="number"
               step="0.01"
@@ -297,14 +409,14 @@ export function ListingForm({
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Status">
+          <Field label={t('Status')}>
             <select className="input" value={form.status} onChange={(e) => set({ status: e.target.value as any })}>
               {LISTING_STATUSES.map((s) => (
                 <option key={s}>{s}</option>
               ))}
             </select>
           </Field>
-          <Field label="Priority">
+          <Field label={t('Priority')}>
             <select
               className="input"
               value={form.priority}
@@ -319,7 +431,7 @@ export function ListingForm({
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Ads">
+          <Field label={t('Ads')}>
             <div className="flex items-center gap-2 pt-1">
               <input
                 id="adEnabled"
@@ -328,11 +440,11 @@ export function ListingForm({
                 onChange={(e) => set({ adEnabled: e.target.checked })}
               />
               <label htmlFor="adEnabled" className="text-sm">
-                Ads enabled
+                {t('Ads enabled')}
               </label>
             </div>
           </Field>
-          <Field label="Ad Strategy">
+          <Field label={t('Ad Strategy')}>
             <select
               className="input"
               disabled={!form.adEnabled}
@@ -345,7 +457,7 @@ export function ListingForm({
             </select>
           </Field>
         </div>
-        <Field label="Notes">
+        <Field label={t('Notes')}>
           <textarea
             className="input min-h-[70px]"
             value={form.notes}
@@ -359,10 +471,11 @@ export function ListingForm({
 
 export function NewListingButton({ className = 'btn-primary' }: { className?: string }) {
   const [open, setOpen] = useState(false);
+  const { t } = useLang();
   return (
     <>
       <button className={className} onClick={() => setOpen(true)}>
-        + New Listing
+        {t('+ New Listing')}
       </button>
       <ListingForm open={open} onClose={() => setOpen(false)} />
     </>

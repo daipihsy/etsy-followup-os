@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { PageHeader } from '@/components/AppShell';
 import { SyncPanel } from '@/components/SyncManager';
+import { useLang } from '@/components/lang';
 import { ConfirmButton, Field, useToast } from '@/components/ui';
 import { loadDemoData } from '@/lib/demo';
 import { getDB } from '@/lib/db';
@@ -22,6 +23,7 @@ import type { BackupData, Settings } from '@/lib/types';
 export default function SettingsPage() {
   const { settings } = useAppData();
   const toast = useToast();
+  const { t } = useLang();
   const [form, setForm] = useState<Settings>(settings);
   const fileRef = useRef<HTMLInputElement>(null);
   const [pendingImport, setPendingImport] = useState<BackupData | null>(null);
@@ -97,17 +99,17 @@ export default function SettingsPage() {
   return (
     <div className="max-w-3xl">
       <PageHeader
-        title="Settings"
+        title={t('Settings')}
         actions={
           <button className="btn-primary" onClick={save}>
-            Save Settings
+            {t('Save Settings')}
           </button>
         }
       />
 
       {/* Thresholds */}
       <section className="card p-4 mb-4">
-        <h2 className="text-sm font-semibold mb-3">Signal Thresholds</h2>
+        <h2 className="text-sm font-semibold mb-3">{t('Signal Thresholds')}</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <Field label="Positive CTR %" hint="Default 2.5">
             <input type="number" step="0.1" className="input" value={form.positiveCtrThreshold} onChange={(e) => set({ positiveCtrThreshold: parseNum(e.target.value) ?? 0 })} />
@@ -129,7 +131,7 @@ export default function SettingsPage() {
 
       {/* Matrix thresholds */}
       <section className="card p-4 mb-4">
-        <h2 className="text-sm font-semibold mb-3">Product Matrix Quadrants</h2>
+        <h2 className="text-sm font-semibold mb-3">{t('Product Matrix Quadrants')}</h2>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Matrix CTR threshold %">
             <input type="number" step="0.1" className="input" value={form.matrixCtrThreshold} onChange={(e) => set({ matrixCtrThreshold: parseNum(e.target.value) ?? 0 })} />
@@ -142,22 +144,22 @@ export default function SettingsPage() {
 
       {/* General */}
       <section className="card p-4 mb-4">
-        <h2 className="text-sm font-semibold mb-3">General</h2>
+        <h2 className="text-sm font-semibold mb-3">{t('General')}</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <Field label="Currency">
+          <Field label={t('Currency')}>
             <select className="input" value={form.currency} onChange={(e) => set({ currency: e.target.value })}>
               {['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY'].map((c) => (
                 <option key={c}>{c}</option>
               ))}
             </select>
           </Field>
-          <Field label="Default Shop">
+          <Field label={t('Default Shop')}>
             <input className="input" value={form.defaultShop} onChange={(e) => set({ defaultShop: e.target.value })} />
           </Field>
-          <Field label="Theme">
+          <Field label={t('Theme')}>
             <select className="input" value={form.theme} onChange={(e) => set({ theme: e.target.value as 'light' | 'dark' })}>
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
+              <option value="dark">{t('Dark')}</option>
+              <option value="light">{t('Light')}</option>
             </select>
           </Field>
         </div>
@@ -168,7 +170,7 @@ export default function SettingsPage() {
 
       {/* Data */}
       <section className="card p-4 mb-4">
-        <h2 className="text-sm font-semibold mb-1">Data & Backup</h2>
+        <h2 className="text-sm font-semibold mb-1">{t('Data & Backup')}</h2>
         <p className="text-xs text-muted mb-3">
           All data lives only in this browser (IndexedDB). It is not synced anywhere — export regularly.
           {dbCounts && (
@@ -177,10 +179,10 @@ export default function SettingsPage() {
         </p>
         <div className="flex flex-wrap gap-2">
           <button className="btn-primary btn-xs" onClick={doExport}>
-            Export All Data (JSON)
+            {t('Export All Data (JSON)')}
           </button>
           <button className="btn-outline btn-xs" onClick={() => fileRef.current?.click()}>
-            Import Backup…
+            {t('Import Backup…')}
           </button>
           <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onFile} />
           <ConfirmButton
@@ -194,7 +196,7 @@ export default function SettingsPage() {
               toast('Demo data loaded', 'positive');
             }}
           >
-            Load Demo Data
+            {t('Load Demo Data')}
           </ConfirmButton>
           <ConfirmButton
             className="btn-danger btn-xs ml-auto"
@@ -207,7 +209,7 @@ export default function SettingsPage() {
               toast('All data reset', 'danger');
             }}
           >
-            Reset All Data
+            {t('Reset All Data')}
           </ConfirmButton>
         </div>
       </section>

@@ -6,6 +6,7 @@ import { ExperimentBadge } from '@/components/badges';
 import { ConcludeExperimentModal } from '@/components/forms';
 import { ListingLink } from '@/components/QuickActions';
 import { ConfirmButton, EmptyState, Segmented } from '@/components/ui';
+import { useLang } from '@/components/lang';
 import { useAppData } from '@/hooks/useData';
 import { deleteExperiment } from '@/lib/repo';
 import { type Experiment, type Metrics } from '@/lib/types';
@@ -58,6 +59,7 @@ function BeforeAfter({ exp }: { exp: Experiment }) {
 
 export default function ExperimentsPage() {
   const { experiments, byId } = useAppData();
+  const { t } = useLang();
   const [filter, setFilter] = useState<'all' | 'active' | 'concluded'>('all');
   const [concluding, setConcluding] = useState<Experiment | null>(null);
 
@@ -75,16 +77,16 @@ export default function ExperimentsPage() {
   return (
     <div>
       <PageHeader
-        title="Experiments"
-        subtitle="One variable at a time. Capture before/after and record what you learned."
+        title={t('Experiments')}
+        subtitle={t('One variable at a time. Capture before/after and record what you learned.')}
         actions={
           <Segmented
             value={filter}
             onChange={setFilter}
             options={[
-              { label: 'All', value: 'all' },
-              { label: 'Active', value: 'active' },
-              { label: 'Concluded', value: 'concluded' },
+              { label: t('All'), value: 'all' },
+              { label: t('In progress'), value: 'active' },
+              { label: t('Concluded'), value: 'concluded' },
             ]}
           />
         }
@@ -93,8 +95,8 @@ export default function ExperimentsPage() {
       {sorted.length === 0 ? (
         <EmptyState
           icon="⚗"
-          title="No experiments yet"
-          description="Open a listing (or use its Quick Actions) and choose “Experiment” to start one."
+          title={t('No experiments yet')}
+          description={t('Open a listing (or use its Quick Actions) and choose “Experiment” to start one.')}
         />
       ) : (
         <div className="grid gap-3 md:grid-cols-2">

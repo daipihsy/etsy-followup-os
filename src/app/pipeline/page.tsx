@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { PageHeader } from '@/components/AppShell';
 import { ListingLink } from '@/components/QuickActions';
+import { useLang } from '@/components/lang';
 import { useToast } from '@/components/ui';
 import { useAppData } from '@/hooks/useData';
 import { updateListing } from '@/lib/repo';
@@ -25,6 +26,7 @@ const COLUMN_ACCENT: Partial<Record<ListingStatus, string>> = {
 function Card({ d, onDragStart }: { d: DerivedListing; onDragStart: (id: string) => void }) {
   const l = d.listing;
   const m = l.currentMetrics;
+  const { t } = useLang();
   return (
     <div
       draggable
@@ -35,9 +37,9 @@ function Card({ d, onDragStart }: { d: DerivedListing; onDragStart: (id: string)
         {l.listingName}
       </ListingLink>
       <div className="mt-1.5 flex items-center justify-between text-2xs text-muted">
-        <span>{d.age}d · {d.ageStage}</span>
-        {d.isOverdue && <span className="text-danger">Overdue</span>}
-        {d.isDueToday && <span className="text-warning">Due today</span>}
+        <span>{d.age}d · {t(d.ageStage)}</span>
+        {d.isOverdue && <span className="text-danger">{t('Overdue')}</span>}
+        {d.isDueToday && <span className="text-warning">{t('Due today')}</span>}
       </div>
       <div className="mt-1.5 grid grid-cols-4 gap-1 text-2xs">
         <div><div className="text-muted">CTR</div><div className={cx('tnum font-medium', d.hasGoodPerformance && 'text-positive')}>{fmtPct(m.ctr)}</div></div>
@@ -46,7 +48,7 @@ function Card({ d, onDragStart }: { d: DerivedListing; onDragStart: (id: string)
         <div><div className="text-muted">Ord</div><div className="tnum font-medium">{m.orders ?? '—'}</div></div>
       </div>
       <div className="mt-1.5 flex items-center justify-between text-2xs text-muted">
-        <span className="truncate">{d.lastAction ? d.lastAction.type : 'No action'}</span>
+        <span className="truncate">{d.lastAction ? d.lastAction.type : t('No action')}</span>
         <span>{d.nextReviewDate ? relativeLabel(d.nextReviewDate) : ''}</span>
       </div>
     </div>
@@ -56,6 +58,7 @@ function Card({ d, onDragStart }: { d: DerivedListing; onDragStart: (id: string)
 export default function PipelinePage() {
   const { derived } = useAppData();
   const toast = useToast();
+  const { t } = useLang();
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<ListingStatus | null>(null);
 
@@ -82,7 +85,7 @@ export default function PipelinePage() {
 
   return (
     <div>
-      <PageHeader title="Pipeline" subtitle="Drag a listing between stages. Changes save immediately." />
+      <PageHeader title={t('Pipeline')} subtitle={t('Drag a listing between stages. Changes save immediately.')} />
       <div className="flex gap-3 overflow-x-auto pb-4">
         {PIPELINE_STATUSES.map((status) => {
           const items = byStatus.get(status) ?? [];
@@ -102,7 +105,7 @@ export default function PipelinePage() {
               )}
             >
               <div className="mb-2 flex items-center justify-between px-1">
-                <span className="text-xs font-semibold">{status}</span>
+                <span className="text-xs font-semibold">{t(status)}</span>
                 <span className="text-2xs text-muted tnum">{items.length}</span>
               </div>
               <div className="space-y-2 min-h-[3rem]">

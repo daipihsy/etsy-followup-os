@@ -9,6 +9,7 @@ import { loadDemoData } from '@/lib/demo';
 import { updateSettings } from '@/lib/repo';
 import { cx } from '@/lib/util';
 import { NewListingButton } from './forms';
+import { LangProvider, LangToggle, useLang } from './lang';
 import { SyncManager } from './SyncManager';
 import { ToastProvider, useToast } from './ui';
 
@@ -27,6 +28,7 @@ function normalize(path: string): string {
 }
 
 function ThemeToggle() {
+  const { t } = useLang();
   const [dark, setDark] = useState(true);
   useEffect(() => {
     setDark(document.documentElement.classList.contains('dark'));
@@ -43,13 +45,14 @@ function ThemeToggle() {
   return (
     <button className="btn-ghost btn-xs w-full justify-start" onClick={toggle} title="Toggle theme">
       <span className="w-4 text-center">{dark ? '☾' : '☀'}</span>
-      {dark ? 'Dark' : 'Light'} mode
+      {dark ? t('Dark mode') : t('Light mode')}
     </button>
   );
 }
 
 function FirstRunPrompt() {
   const toast = useToast();
+  const { t } = useLang();
   const count = useLiveQuery(() => getDB().listings.count(), []);
   const settings = useLiveQuery(() => getDB().settings.get('app'), []);
   const [busy, setBusy] = useState(false);
@@ -69,17 +72,19 @@ function FirstRunPrompt() {
   return (
     <div className="mb-4 card border-accent/40 bg-accent/5 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
       <div>
-        <p className="text-sm font-medium">Welcome to Etsy Listing Follow-up OS</p>
+        <p className="text-sm font-medium">{t('Welcome to Etsy Listing Follow-up OS')}</p>
         <p className="text-xs text-muted">
-          Your database is empty. Load a sample pool of listings to explore every feature, or add your first listing.
+          {t(
+            'Your database is empty. Load a sample pool of listings to explore every feature, or add your first listing.',
+          )}
         </p>
       </div>
       <div className="flex gap-2">
         <button className="btn-outline btn-xs" onClick={() => setDismissed(true)}>
-          Start empty
+          {t('Start empty')}
         </button>
         <button className="btn-primary btn-xs" onClick={load} disabled={busy}>
-          {busy ? 'Loading…' : 'Load Demo Data'}
+          {busy ? t('Loading…') : t('Load Demo Data')}
         </button>
       </div>
     </div>
@@ -88,12 +93,13 @@ function FirstRunPrompt() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   const pathname = normalize(usePathname() || '/');
+  const { t } = useLang();
   return (
     <div className="flex min-h-screen">
       <aside className="hidden md:flex w-56 shrink-0 flex-col border-r border-border bg-surface">
         <div className="px-4 py-4 border-b border-border">
-          <div className="text-sm font-semibold leading-tight">Etsy Follow-up</div>
-          <div className="text-2xs text-muted">Listing Operations OS</div>
+          <div className="text-sm font-semibold leading-tight">{t('Etsy Follow-up')}</div>
+          <div className="text-2xs text-muted">{t('Listing Operations OS')}</div>
         </div>
         <nav className="flex-1 px-2 py-3 space-y-0.5">
           {NAV.map((item) => {
@@ -108,13 +114,14 @@ function Shell({ children }: { children: React.ReactNode }) {
                 )}
               >
                 <span className="w-4 text-center opacity-80">{item.icon}</span>
-                {item.label}
+                {t(item.label)}
               </Link>
             );
           })}
         </nav>
-        <div className="px-2 py-3 border-t border-border space-y-1">
+        <div className="px-2 py-3 border-t border-border space-y-1.5">
           <SyncManager />
+          <LangToggle />
           <ThemeToggle />
         </div>
       </aside>
@@ -132,7 +139,7 @@ function Shell({ children }: { children: React.ReactNode }) {
                 active ? 'bg-accent/15 text-accent font-medium' : 'text-muted',
               )}
             >
-              {item.label}
+              {t(item.label)}
             </Link>
           );
         })}
@@ -150,9 +157,11 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <ToastProvider>
-      <Shell>{children}</Shell>
-    </ToastProvider>
+    <LangProvider>
+      <ToastProvider>
+        <Shell>{children}</Shell>
+      </ToastProvider>
+    </LangProvider>
   );
 }
 

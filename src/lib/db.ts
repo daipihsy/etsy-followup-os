@@ -19,6 +19,7 @@ export const DEFAULT_SETTINGS: Settings = {
   currency: 'USD',
   defaultShop: '',
   theme: 'dark',
+  lang: 'en',
   matrixCtrThreshold: 2.5,
   matrixCvrThreshold: 3.0,
   demoLoaded: false,

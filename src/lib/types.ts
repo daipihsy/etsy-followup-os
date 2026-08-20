@@ -197,6 +197,7 @@ export interface Settings {
   currency: string;
   defaultShop: string;
   theme: 'light' | 'dark';
+  lang: 'en' | 'zh';
   // Product Matrix quadrant thresholds (defaults mirror the positive thresholds).
   matrixCtrThreshold: number;
   matrixCvrThreshold: number;

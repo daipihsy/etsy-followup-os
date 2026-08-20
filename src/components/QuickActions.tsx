@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { snoozeReview } from '@/lib/repo';
 import type { DerivedListing } from '@/lib/derive';
 import { ActionModal, ExperimentModal, ReviewModal, SnapshotModal } from './forms';
+import { useLang } from './lang';
 import { useToast } from './ui';
 
 export function ListingLink({
@@ -31,6 +32,7 @@ interface Props {
 
 export function QuickActions({ derived, size = 'xs', showDetail = true }: Props) {
   const toast = useToast();
+  const { t } = useLang();
   const [modal, setModal] = useState<null | 'action' | 'snapshot' | 'experiment' | 'review'>(null);
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const btn = size === 'xs' ? 'btn-outline btn-xs' : 'btn-outline';
@@ -46,24 +48,24 @@ export function QuickActions({ derived, size = 'xs', showDetail = true }: Props)
     <div className="flex flex-wrap items-center gap-1">
       {showDetail && (
         <ListingLink id={l.id} className={btn}>
-          Open
+          {t('Open')}
         </ListingLink>
       )}
       <button className={btn} onClick={() => setModal('action')}>
-        Action
+        {t('Action')}
       </button>
       <button className={btn} onClick={() => setModal('snapshot')}>
-        Snapshot
+        {t('Snapshot')}
       </button>
       <button className={btn} onClick={() => setModal('experiment')}>
-        Experiment
+        {t('Experiment')}
       </button>
       <button className={btn} onClick={() => setModal('review')}>
-        Review
+        {t('Review')}
       </button>
       <div className="relative">
         <button className={btn} onClick={() => setSnoozeOpen((v) => !v)} onBlur={() => setTimeout(() => setSnoozeOpen(false), 150)}>
-          Snooze ▾
+          {t('Snooze')} ▾
         </button>
         {snoozeOpen && (
           <div className="absolute z-30 mt-1 card p-1 shadow-lg flex flex-col min-w-[7rem]">

@@ -16,6 +16,7 @@ import { PageHeader } from '@/components/AppShell';
 import { StatusBadge } from '@/components/badges';
 import { ListingLink } from '@/components/QuickActions';
 import { Badge, EmptyState, StatCard } from '@/components/ui';
+import { useLang } from '@/components/lang';
 import { useAppData } from '@/hooks/useData';
 import { daysSince } from '@/lib/date';
 import type { Metrics } from '@/lib/types';
@@ -60,6 +61,7 @@ function MatrixTooltip({ active, payload }: any) {
 
 export default function AnalyticsPage() {
   const { derived, experiments, actions, reviews, settings } = useAppData();
+  const { t } = useLang();
 
   // ---- Product Matrix ----
   const points = useMemo<Point[]>(() => {
@@ -143,24 +145,24 @@ export default function AnalyticsPage() {
 
   return (
     <div>
-      <PageHeader title="Analytics" subtitle="Your Etsy playbook — what you’ve tried and what has worked." />
+      <PageHeader title={t('Analytics')} subtitle={t('Your Etsy playbook — what you’ve tried and what has worked.')} />
 
       {/* Action frequency */}
       <section className="mb-6">
-        <h2 className="mb-2 text-sm font-semibold">Activity — last 7 days</h2>
+        <h2 className="mb-2 text-sm font-semibold">{t('Activity — last 7 days')}</h2>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-          <StatCard label="Actions" value={freq.actionsN} tone="accent" />
-          <StatCard label="Reviews" value={freq.reviewsN} tone="info" />
-          <StatCard label="Listings Reviewed" value={freq.listingsReviewed} />
-          <StatCard label="Experiments Started" value={freq.startedN} tone="warning" />
-          <StatCard label="Experiments Completed" value={freq.completedN} tone="positive" />
+          <StatCard label={t('Actions')} value={freq.actionsN} tone="accent" />
+          <StatCard label={t('Reviews')} value={freq.reviewsN} tone="info" />
+          <StatCard label={t('Listings Reviewed')} value={freq.listingsReviewed} />
+          <StatCard label={t('Experiments Started')} value={freq.startedN} tone="warning" />
+          <StatCard label={t('Experiments Completed')} value={freq.completedN} tone="positive" />
         </div>
       </section>
 
       {/* Product Matrix */}
       <section className="mb-6">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Product Matrix — CTR × CVR</h2>
+          <h2 className="text-sm font-semibold">{t('Product Matrix — CTR × CVR')}</h2>
           <div className="flex gap-1">
             <Badge tone="positive">High CTR · High CVR</Badge>
             <Badge tone="warning">High CTR · Low CVR</Badge>
@@ -216,7 +218,7 @@ export default function AnalyticsPage() {
       {/* Untouched Winners */}
       <section className="mb-6">
         <h2 className="mb-2 text-sm font-semibold">
-          Untouched Winners <span className="font-normal text-muted">({untouched.length})</span>
+          {t('Untouched Winners')} <span className="font-normal text-muted">({untouched.length})</span>
         </h2>
         {untouched.length === 0 ? (
           <div className="card px-4 py-6 text-center text-sm text-muted">
@@ -248,10 +250,10 @@ export default function AnalyticsPage() {
       {/* Playbook */}
       <section>
         <h2 className="mb-2 text-sm font-semibold">
-          My Etsy Playbook <span className="font-normal text-muted">({totalExperiments} experiments)</span>
+          {t('My Etsy Playbook')} <span className="font-normal text-muted">({totalExperiments})</span>
         </h2>
         {playbook.length === 0 ? (
-          <EmptyState icon="⚗" title="No concluded experiments yet" description="Conclude a few experiments to build your win-rate history by variable." />
+          <EmptyState icon="⚗" title={t('No concluded experiments yet')} description={t('Conclude a few experiments to build your win-rate history by variable.')} />
         ) : (
           <div className="card overflow-x-auto">
             <table className="w-full min-w-[640px] tnum">

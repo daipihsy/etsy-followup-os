@@ -6,6 +6,7 @@ import { AdBadge, PriorityBadge, StatusBadge } from '@/components/badges';
 import { BulkBar } from '@/components/BulkBar';
 import { FiltersPanel } from '@/components/FiltersPanel';
 import { ListingLink, QuickActions } from '@/components/QuickActions';
+import { useLang } from '@/components/lang';
 import { EmptyState, StatCard } from '@/components/ui';
 import { useAppData } from '@/hooks/useData';
 import type { DerivedListing } from '@/lib/derive';
@@ -79,6 +80,7 @@ const COLUMNS: { key: SortKey; label: string; num?: boolean }[] = [
 
 export default function DashboardPage() {
   const { derived, settings, savedFilters, loading } = useAppData();
+  const { t, lang } = useLang();
   const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER);
   const [sort, setSort] = useState<Sort>({ key: 'nextReview', dir: 'asc' });
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -154,18 +156,25 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <PageHeader title="Dashboard" subtitle={`${pool.totalActive} active listings in your pool.`} />
+      <PageHeader
+        title={t('Dashboard')}
+        subtitle={
+          lang === 'zh'
+            ? `你的池中有 ${pool.totalActive} 个在跟进的 listing。`
+            : `${pool.totalActive} active listings in your pool.`
+        }
+      />
 
       <div className="mb-4 grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2">
-        <StatCard label="Active" value={pool.totalActive} tone="accent" />
-        <StatCard label="New" value={pool.counts['New'] ?? 0} />
-        <StatCard label="Observe" value={pool.counts['Observe'] ?? 0} tone="info" />
-        <StatCard label="Testing" value={pool.counts['Testing'] ?? 0} tone="warning" />
-        <StatCard label="Follow-up" value={pool.counts['Follow-up'] ?? 0} />
-        <StatCard label="Growing" value={pool.counts['Growing'] ?? 0} tone="positive" />
-        <StatCard label="Winner" value={pool.counts['Winner'] ?? 0} tone="positive" />
-        <StatCard label="Review Due" value={pool.reviewDue} tone="warning" />
-        <StatCard label="Overdue" value={pool.overdue} tone="danger" />
+        <StatCard label={t('Active')} value={pool.totalActive} tone="accent" />
+        <StatCard label={t('New')} value={pool.counts['New'] ?? 0} />
+        <StatCard label={t('Observe')} value={pool.counts['Observe'] ?? 0} tone="info" />
+        <StatCard label={t('Testing')} value={pool.counts['Testing'] ?? 0} tone="warning" />
+        <StatCard label={t('Follow-up')} value={pool.counts['Follow-up'] ?? 0} />
+        <StatCard label={t('Growing')} value={pool.counts['Growing'] ?? 0} tone="positive" />
+        <StatCard label={t('Winner')} value={pool.counts['Winner'] ?? 0} tone="positive" />
+        <StatCard label={t('Review Due')} value={pool.reviewDue} tone="warning" />
+        <StatCard label={t('Overdue')} value={pool.overdue} tone="danger" />
       </div>
 
       <FiltersPanel
@@ -183,14 +192,16 @@ export default function DashboardPage() {
 
       <div className="mb-2 flex items-center justify-between text-xs text-muted">
         <span>
-          Showing {rows.length} of {derived.length} · No-action ≥ {settings.untouchedWarningDays}d: {pool.noAction}
+          {lang === 'zh'
+            ? `显示 ${rows.length} / ${derived.length} · ${settings.untouchedWarningDays}天未动作: ${pool.noAction}`
+            : `Showing ${rows.length} of ${derived.length} · No-action ≥ ${settings.untouchedWarningDays}d: ${pool.noAction}`}
         </span>
       </div>
 
       {loading ? (
-        <div className="text-sm text-muted py-10 text-center">Loading…</div>
+        <div className="text-sm text-muted py-10 text-center">{t('Loading…')}</div>
       ) : rows.length === 0 ? (
-        <EmptyState title="No listings match" description="Adjust your filters or add a listing." />
+        <EmptyState title={t('No listings match')} description={t('Adjust your filters or add a listing.')} />
       ) : (
         <div className="card overflow-x-auto">
           <table className="w-full min-w-[1100px] tnum">
@@ -205,16 +216,16 @@ export default function DashboardPage() {
                     className={cx('th cursor-pointer hover:text-fg', c.num && 'text-right')}
                     onClick={() => toggleSort(c.key)}
                   >
-                    {c.label}
+                    {t(c.label)}
                     {sort.key === c.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
                   </th>
                 ))}
-                <th className="th">Ads</th>
+                <th className="th">{t('Ads')}</th>
                 <th className="th cursor-pointer hover:text-fg" onClick={() => toggleSort('daysSinceAction')}>
-                  Last Action{sort.key === 'daysSinceAction' ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
+                  {t('Last Action')}{sort.key === 'daysSinceAction' ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
                 </th>
                 <th className="th cursor-pointer hover:text-fg" onClick={() => toggleSort('nextReview')}>
-                  Next Review{sort.key === 'nextReview' ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
+                  {t('Next Review')}{sort.key === 'nextReview' ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
                 </th>
                 <th className="th"></th>
               </tr>
@@ -265,7 +276,7 @@ export default function DashboardPage() {
                           {d.lastAction.type} · <span className="text-muted">{agoLabel(d.lastAction.date)}</span>
                         </span>
                       ) : (
-                        <span className="text-muted">None</span>
+                        <span className="text-muted">{t('None')}</span>
                       )}
                     </td>
                     <td className="td whitespace-nowrap">
