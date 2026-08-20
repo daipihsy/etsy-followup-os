@@ -82,16 +82,14 @@ export interface NewActionInput {
   types: ActionType[]; // what was adjusted (multi-select)
   linkUrl?: string;
   linkName?: string;
+  imageUrl?: string;
   reason?: string; // note
-  reviewAfterDays?: number | null;
 }
 
 export async function addAction(input: NewActionInput): Promise<Action> {
   const db = getDB();
   const date = input.date || todayISO();
   const types = input.types.length ? input.types : ['备注/其他'];
-  const reviewAfterDays = input.reviewAfterDays ?? null;
-  const reviewDate = reviewAfterDays && reviewAfterDays > 0 ? addDays(date, reviewAfterDays) : undefined;
   const action: Action = {
     id: uid('act'),
     listingId: input.listingId,
@@ -100,18 +98,36 @@ export async function addAction(input: NewActionInput): Promise<Action> {
     types,
     linkUrl: input.linkUrl?.trim() || undefined,
     linkName: input.linkName?.trim() || undefined,
+    imageUrl: input.imageUrl?.trim() || undefined,
     reason: input.reason,
-    reviewAfterDays,
-    reviewDate,
     createdAt: nowISO(),
   };
   await db.actions.put(action);
-
-  // Only side effect: schedule the next review.
-  const patch: Partial<Listing> = { updatedAt: nowISO() };
-  if (reviewDate) patch.nextReviewDate = reviewDate;
-  await db.listings.update(input.listingId, patch);
+  await db.listings.update(input.listingId, { updatedAt: nowISO() });
   return action;
+}
+
+export interface EditActionInput {
+  date?: string;
+  types?: ActionType[];
+  linkUrl?: string;
+  linkName?: string;
+  imageUrl?: string;
+  reason?: string;
+}
+
+export async function updateAction(id: string, patch: EditActionInput): Promise<void> {
+  const next: Partial<Action> = {};
+  if (patch.date) next.date = patch.date;
+  if (patch.types) {
+    next.types = patch.types.length ? patch.types : ['备注/其他'];
+    next.type = next.types[0];
+  }
+  if ('linkUrl' in patch) next.linkUrl = patch.linkUrl?.trim() || undefined;
+  if ('linkName' in patch) next.linkName = patch.linkName?.trim() || undefined;
+  if ('imageUrl' in patch) next.imageUrl = patch.imageUrl?.trim() || undefined;
+  if ('reason' in patch) next.reason = patch.reason;
+  await getDB().actions.update(id, next);
 }
 
 export async function deleteAction(id: string): Promise<void> {
