@@ -4,9 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { PageHeader } from '@/components/AppShell';
 import { SyncPanel } from '@/components/SyncManager';
 import { useLang } from '@/components/lang';
-import { ConfirmButton, useToast } from '@/components/ui';
+import { ConfirmButton, Field, useToast } from '@/components/ui';
 import { loadDemoData } from '@/lib/demo';
 import { getDB } from '@/lib/db';
+import { useAppData } from '@/hooks/useData';
 import {
   exportBackup,
   importBackup,
@@ -16,21 +17,32 @@ import {
   type ImportMode,
 } from '@/lib/repo';
 import { todayISO } from '@/lib/date';
-import type { BackupData } from '@/lib/types';
+import { parseNum } from '@/lib/util';
+import type { BackupData, Settings } from '@/lib/types';
 
 export default function SettingsPage() {
-  const { t } = useLang();
+  const { settings } = useAppData();
   const toast = useToast();
+  const { t } = useLang();
+  const [form, setForm] = useState<Settings>(settings);
   const fileRef = useRef<HTMLInputElement>(null);
   const [pendingImport, setPendingImport] = useState<BackupData | null>(null);
-  const [counts, setCounts] = useState<{ listings: number; actions: number } | null>(null);
 
+  // Keep the form in sync once settings load.
   useEffect(() => {
-    const db = getDB();
-    Promise.all([db.listings.count(), db.actions.count()]).then(([listings, actions]) =>
-      setCounts({ listings, actions }),
-    );
-  }, [pendingImport]);
+    setForm(settings);
+  }, [settings]);
+
+  const set = (patch: Partial<Settings>) => setForm((f) => ({ ...f, ...patch }));
+
+  async function save() {
+    await updateSettings(form);
+    try {
+      localStorage.setItem('efos-theme', form.theme);
+    } catch {}
+    document.documentElement.classList.toggle('dark', form.theme === 'dark');
+    toast('Settings saved', 'positive');
+  }
 
   async function doExport() {
     const data = await exportBackup();
@@ -38,12 +50,12 @@ export default function SettingsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `etsy-journal-backup-${todayISO()}.json`;
+    a.download = `etsy-followup-backup-${todayISO()}.json`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    toast(t('Backup exported'), 'positive');
+    toast('Backup exported', 'positive');
   }
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -51,14 +63,15 @@ export default function SettingsPage() {
     e.target.value = '';
     if (!file) return;
     try {
-      const data = JSON.parse(await file.text());
+      const text = await file.text();
+      const data = JSON.parse(text);
       if (!validateBackup(data)) {
-        toast(t('Invalid backup file'), 'danger');
+        toast('Invalid backup file', 'danger');
         return;
       }
       setPendingImport(data);
     } catch {
-      toast(t('Could not read file'), 'danger');
+      toast('Could not read file', 'danger');
     }
   }
 
@@ -66,90 +79,169 @@ export default function SettingsPage() {
     if (!pendingImport) return;
     await importBackup(pendingImport, mode);
     setPendingImport(null);
-    toast(t('Imported'), 'positive');
+    toast(`Imported (${mode})`, 'positive');
   }
 
-  return (
-    <div className="max-w-2xl mx-auto">
-      <PageHeader title={t('Settings')} actions={<span />} />
+  async function counts() {
+    const db = getDB();
+    return {
+      listings: await db.listings.count(),
+      actions: await db.actions.count(),
+      snapshots: await db.snapshots.count(),
+      experiments: await db.experiments.count(),
+    };
+  }
+  const [dbCounts, setDbCounts] = useState<{ listings: number; actions: number; snapshots: number; experiments: number } | null>(null);
+  useEffect(() => {
+    counts().then(setDbCounts);
+  }, [settings]);
 
-      {/* Cloud sync */}
+  return (
+    <div className="max-w-3xl">
+      <PageHeader
+        title={t('Settings')}
+        actions={
+          <button className="btn-primary" onClick={save}>
+            {t('Save Settings')}
+          </button>
+        }
+      />
+
+      {/* Thresholds */}
+      <section className="card p-4 mb-4">
+        <h2 className="text-sm font-semibold mb-3">{t('Signal Thresholds')}</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <Field label="Positive CTR %" hint="Default 2.5">
+            <input type="number" step="0.1" className="input" value={form.positiveCtrThreshold} onChange={(e) => set({ positiveCtrThreshold: parseNum(e.target.value) ?? 0 })} />
+          </Field>
+          <Field label="Positive CVR %">
+            <input type="number" step="0.1" className="input" value={form.positiveCvrThreshold} onChange={(e) => set({ positiveCvrThreshold: parseNum(e.target.value) ?? 0 })} />
+          </Field>
+          <Field label="Positive ROAS" hint="Default 2.5">
+            <input type="number" step="0.1" className="input" value={form.positiveRoasThreshold} onChange={(e) => set({ positiveRoasThreshold: parseNum(e.target.value) ?? 0 })} />
+          </Field>
+          <Field label="Untouched Warning (days)" hint="Default 5">
+            <input type="number" className="input" value={form.untouchedWarningDays} onChange={(e) => set({ untouchedWarningDays: parseNum(e.target.value) ?? 0 })} />
+          </Field>
+          <Field label="Default Review Interval (days)" hint="Default 3">
+            <input type="number" className="input" value={form.defaultReviewIntervalDays} onChange={(e) => set({ defaultReviewIntervalDays: parseNum(e.target.value) ?? 0 })} />
+          </Field>
+        </div>
+      </section>
+
+      {/* Matrix thresholds */}
+      <section className="card p-4 mb-4">
+        <h2 className="text-sm font-semibold mb-3">{t('Product Matrix Quadrants')}</h2>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Matrix CTR threshold %">
+            <input type="number" step="0.1" className="input" value={form.matrixCtrThreshold} onChange={(e) => set({ matrixCtrThreshold: parseNum(e.target.value) ?? 0 })} />
+          </Field>
+          <Field label="Matrix CVR threshold %">
+            <input type="number" step="0.1" className="input" value={form.matrixCvrThreshold} onChange={(e) => set({ matrixCvrThreshold: parseNum(e.target.value) ?? 0 })} />
+          </Field>
+        </div>
+      </section>
+
+      {/* General */}
+      <section className="card p-4 mb-4">
+        <h2 className="text-sm font-semibold mb-3">{t('General')}</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <Field label={t('Currency')}>
+            <select className="input" value={form.currency} onChange={(e) => set({ currency: e.target.value })}>
+              {['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY'].map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label={t('Default Shop')}>
+            <input className="input" value={form.defaultShop} onChange={(e) => set({ defaultShop: e.target.value })} />
+          </Field>
+          <Field label={t('Theme')}>
+            <select className="input" value={form.theme} onChange={(e) => set({ theme: e.target.value as 'light' | 'dark' })}>
+              <option value="dark">{t('Dark')}</option>
+              <option value="light">{t('Light')}</option>
+            </select>
+          </Field>
+        </div>
+      </section>
+
+      {/* Cloud Sync */}
       <SyncPanel />
 
       {/* Data */}
       <section className="card p-4 mb-4">
         <h2 className="text-sm font-semibold mb-1">{t('Data & Backup')}</h2>
         <p className="text-xs text-muted mb-3">
-          {t('Everything is stored only in this browser. Export a backup now and then.')}
-          {counts && ` · ${counts.listings} ${t('listings')}, ${counts.actions} ${t('entries')}`}
+          All data lives only in this browser (IndexedDB). It is not synced anywhere — export regularly.
+          {dbCounts && (
+            <> Currently storing {dbCounts.listings} listings, {dbCounts.actions} actions, {dbCounts.snapshots} snapshots, {dbCounts.experiments} experiments.</>
+          )}
         </p>
         <div className="flex flex-wrap gap-2">
           <button className="btn-primary btn-xs" onClick={doExport}>
-            {t('Export backup (JSON)')}
+            {t('Export All Data (JSON)')}
           </button>
           <button className="btn-outline btn-xs" onClick={() => fileRef.current?.click()}>
-            {t('Import backup…')}
+            {t('Import Backup…')}
           </button>
           <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onFile} />
           <ConfirmButton
             className="btn-outline btn-xs"
-            title={t('Load sample data')}
-            message={t('This adds some sample listings and entries so you can see how it works. Continue?')}
-            confirmLabel={t('Load')}
+            title="Load demo data"
+            message="This adds ~15 sample listings to your database. Continue?"
+            confirmLabel="Load demo"
             onConfirm={async () => {
               await loadDemoData();
               await updateSettings({ demoLoaded: true });
-              toast(t('Sample data loaded'), 'positive');
+              toast('Demo data loaded', 'positive');
             }}
           >
-            {t('Load sample data')}
+            {t('Load Demo Data')}
           </ConfirmButton>
           <ConfirmButton
             className="btn-danger btn-xs ml-auto"
-            title={t('Reset all data')}
-            message={t('This permanently deletes ALL listings and entries in this browser. Export a backup first. This cannot be undone.')}
-            confirmLabel={t('Delete everything')}
+            title="Reset all data"
+            message="This permanently deletes ALL listings, actions, snapshots, experiments and reviews from this browser. Export a backup first. This cannot be undone."
+            confirmLabel="Delete everything"
             danger
             onConfirm={async () => {
               await wipeAll();
-              toast(t('All data reset'), 'danger');
+              toast('All data reset', 'danger');
             }}
           >
-            {t('Reset all data')}
+            {t('Reset All Data')}
           </ConfirmButton>
         </div>
       </section>
 
+      {/* Import mode chooser */}
       {pendingImport && (
         <div className="card p-4 border-accent/40">
-          <h3 className="text-sm font-semibold">{t('Import backup')}</h3>
+          <h3 className="text-sm font-semibold">Import backup</h3>
           <p className="text-xs text-muted mt-1">
-            {pendingImport.listings.length} {t('listings')}, {pendingImport.actions.length} {t('entries')}
+            Loaded {pendingImport.listings.length} listings, {pendingImport.actions.length} actions,{' '}
+            {pendingImport.snapshots.length} snapshots, {pendingImport.experiments.length} experiments.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button className="btn-primary btn-xs" onClick={() => runImport('merge')}>
-              {t('Merge')}
+              Merge (keep existing, add/overwrite by id)
             </button>
             <ConfirmButton
               className="btn-danger btn-xs"
-              title={t('Replace all data')}
-              message={t('Replace wipes your current data and loads only the backup. This cannot be undone. Continue?')}
-              confirmLabel={t('Replace')}
+              title="Replace all data"
+              message="Replace wipes your current database and loads only the backup’s contents. This cannot be undone. Continue?"
+              confirmLabel="Replace everything"
               danger
               onConfirm={() => runImport('replace')}
             >
-              {t('Replace')}
+              Replace (wipe then load)
             </ConfirmButton>
             <button className="btn-ghost btn-xs" onClick={() => setPendingImport(null)}>
-              {t('Cancel')}
+              Cancel
             </button>
           </div>
         </div>
       )}
-
-      <p className="mt-4 text-2xs text-muted">
-        {t('Language: use the EN / 中文 switch at the bottom of the sidebar.')}
-      </p>
     </div>
   );
 }

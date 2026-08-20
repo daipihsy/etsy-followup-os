@@ -94,7 +94,6 @@ export interface Action {
   types?: ActionType[]; // everything adjusted in this action (multi-select)
   linkUrl?: string; // optional attached link (e.g. the new image / a reference)
   linkName?: string; // custom display name for the link
-  imageUrl?: string; // optional attached image (data URL or link)
   beforeValue?: string;
   afterValue?: string;
   reason?: string; // note

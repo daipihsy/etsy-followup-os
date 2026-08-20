@@ -8,14 +8,17 @@ import { getDB } from '@/lib/db';
 import { loadDemoData } from '@/lib/demo';
 import { updateSettings } from '@/lib/repo';
 import { cx } from '@/lib/util';
-import { AddEntryButton } from './forms';
+import { NewListingButton } from './forms';
 import { LangProvider, LangToggle, useLang } from './lang';
 import { SyncManager } from './SyncManager';
 import { ToastProvider, useToast } from './ui';
 
 const NAV = [
-  { href: '/', label: 'Journal', icon: '◆' },
-  { href: '/listings', label: 'My Listings', icon: '▤' },
+  { href: '/', label: 'Today', icon: '◆' },
+  { href: '/dashboard', label: 'Dashboard', icon: '▤' },
+  { href: '/pipeline', label: 'Pipeline', icon: '▥' },
+  { href: '/experiments', label: 'Experiments', icon: '⚗' },
+  { href: '/analytics', label: 'Analytics', icon: '▦' },
   { href: '/settings', label: 'Settings', icon: '⚙' },
 ];
 
@@ -178,7 +181,7 @@ export function PageHeader({
         <h1 className="text-xl font-semibold">{title}</h1>
         {subtitle && <p className="text-sm text-muted">{subtitle}</p>}
       </div>
-      <div className="flex items-center gap-2">{actions ?? <AddEntryButton />}</div>
+      <div className="flex items-center gap-2">{actions ?? <NewListingButton />}</div>
     </div>
   );
 }

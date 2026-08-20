@@ -1,423 +1,116 @@
 'use client';
 
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useRef, useState } from 'react';
-import { getDB } from '@/lib/db';
-import { addAction, addSnapshot, countTodayRecords, createListing, updateAction, updateListing } from '@/lib/repo';
+import React, { useRef, useState } from 'react';
 import { imageFileToDataUrl, extractImageFile } from '@/lib/image';
-import { computeCtr, computeCvr } from '@/lib/metrics';
-import { ACTION_TYPES, type Action, type Listing, type Metrics } from '@/lib/types';
+import { getDB, DEFAULT_SETTINGS } from '@/lib/db';
+import {
+  addAction,
+  addSnapshot,
+  completeReview,
+  countTodayRecords,
+  createExperiment,
+  createListing,
+  concludeExperiment,
+  updateListing,
+} from '@/lib/repo';
 import { todayISO } from '@/lib/date';
-import { cx, fmtPct, parseNum } from '@/lib/util';
-import { DateInput, Field, Modal, useToast } from './ui';
+import {
+  ACTION_TYPES,
+  AD_STRATEGIES,
+  LISTING_STATUSES,
+  REVIEW_DECISIONS,
+  type AdStrategy,
+  type Experiment,
+  type ExperimentStatus,
+  type Listing,
+  type Metrics,
+  type Priority,
+  type ReviewDecision,
+} from '@/lib/types';
+import { cx, fmtDiff, fmtNum, fmtPct, parseNum } from '@/lib/util';
+import { computeCtr, computeCvr } from '@/lib/metrics';
+import { DateInput, Field, Modal, Segmented, useToast } from './ui';
 import { useLang } from './lang';
+import type { DerivedListing } from '@/lib/derive';
+
+function useSettings() {
+  const s = useLiveQuery(() => getDB().settings.get('app'), []);
+  return { ...DEFAULT_SETTINGS, ...(s ?? {}) };
+}
 
 // ---------------------------------------------------------------------------
-// Image picker — drag / paste / click to upload (compact data URL) or a URL.
+// Review interval picker (shared)
 // ---------------------------------------------------------------------------
 
-export function ImagePicker({
+function ReviewIntervalPicker({
   value,
   onChange,
-  hint,
+  defaultDays,
 }: {
-  value: string;
-  onChange: (v: string) => void;
-  hint?: string;
+  value: number | null;
+  onChange: (v: number | null) => void;
+  defaultDays: number;
 }) {
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [drag, setDrag] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const toast = useToast();
-  const { t } = useLang();
-
-  async function handleFile(file: File) {
-    setBusy(true);
-    try {
-      onChange(await imageFileToDataUrl(file));
-    } catch {
-      toast(t('Could not read that image'), 'danger');
-    } finally {
-      setBusy(false);
-    }
-  }
-
+  const [custom, setCustom] = useState(false);
+  const presets: { label: string; value: number | null }[] = [
+    { label: 'No Review', value: null },
+    { label: '1 Day', value: 1 },
+    { label: '2 Days', value: 2 },
+    { label: '3 Days', value: 3 },
+    { label: '5 Days', value: 5 },
+    { label: '7 Days', value: 7 },
+  ];
+  const isPreset = value === null || presets.some((p) => p.value === value);
   return (
-    <div>
-      <div
-        tabIndex={0}
-        onClick={() => fileRef.current?.click()}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDrag(true);
-        }}
-        onDragLeave={() => setDrag(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDrag(false);
-          const f = extractImageFile(e.dataTransfer);
-          if (f) handleFile(f);
-        }}
-        onPaste={(e) => {
-          const f = extractImageFile(e.clipboardData);
-          if (f) {
-            e.preventDefault();
-            handleFile(f);
-          }
-        }}
-        className={cx(
-          'flex items-center gap-3 rounded-md border border-dashed p-3 cursor-pointer focus:outline-none',
-          drag ? 'border-accent bg-accent/5' : 'border-border',
-        )}
-      >
-        {value ? (
-          <img
-            src={value}
-            alt="preview"
-            className="h-14 w-14 shrink-0 rounded object-cover border border-border"
-            onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
-          />
-        ) : (
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded bg-surface-2 text-2xl text-muted">
-            🖼
-          </div>
-        )}
-        <div className="text-xs text-muted">{busy ? t('Processing…') : t('Drag / paste (Ctrl+V) / click to upload')}</div>
-        {value && (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1">
+        {presets.map((p) => (
           <button
+            key={String(p.value)}
             type="button"
-            className="btn-ghost btn-xs text-danger ml-auto"
-            onClick={(e) => {
-              e.stopPropagation();
-              onChange('');
+            onClick={() => {
+              setCustom(false);
+              onChange(p.value);
             }}
+            className={
+              !custom && value === p.value
+                ? 'btn-primary btn-xs'
+                : 'btn-outline btn-xs'
+            }
           >
-            {t('Remove')}
+            {p.label}
+            {p.value === defaultDays ? ' ·' : ''}
           </button>
-        )}
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            e.target.value = '';
-            if (f) handleFile(f);
+        ))}
+        <button
+          type="button"
+          onClick={() => {
+            setCustom(true);
+            if (isPreset) onChange(defaultDays);
           }}
-        />
+          className={custom ? 'btn-primary btn-xs' : 'btn-outline btn-xs'}
+        >
+          Custom
+        </button>
       </div>
-      <input
-        className="input mt-2"
-        value={value.startsWith('data:') ? '' : value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={hint ?? t('or paste an image link https://…')}
-      />
+      {custom && (
+        <input
+          type="number"
+          min={1}
+          className="input w-28"
+          value={value ?? ''}
+          onChange={(e) => onChange(parseNum(e.target.value) ?? null)}
+          placeholder="days"
+        />
+      )}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Listing create / edit — just a name, an image, and an optional Etsy link.
-// ---------------------------------------------------------------------------
-
-export function ListingForm({
-  open,
-  onClose,
-  listing,
-  onCreated,
-}: {
-  open: boolean;
-  onClose: () => void;
-  listing?: Listing;
-  onCreated?: (l: Listing) => void;
-}) {
-  const toast = useToast();
-  const { t } = useLang();
-  const editing = !!listing;
-  const [name, setName] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-  const [etsyUrl, setEtsyUrl] = useState('');
-  const [notes, setNotes] = useState('');
-
-  const key = listing?.id ?? 'new';
-  const [lastKey, setLastKey] = useState<string | null>(null);
-  if (open && key !== lastKey) {
-    setLastKey(key);
-    setName(listing?.listingName ?? '');
-    setImageUrl(listing?.imageUrl ?? '');
-    setEtsyUrl(listing?.etsyUrl ?? '');
-    setNotes(listing?.notes ?? '');
-  }
-  if (!open && lastKey !== null) setLastKey(null);
-
-  async function submit() {
-    if (!name.trim()) {
-      toast(t('Please enter a name'), 'danger');
-      return;
-    }
-    const payload = {
-      listingName: name.trim(),
-      imageUrl: imageUrl.trim() || undefined,
-      etsyUrl: etsyUrl.trim() || undefined,
-      notes: notes.trim() || undefined,
-    };
-    if (editing && listing) {
-      await updateListing(listing.id, payload);
-      toast(t('Saved'), 'positive');
-    } else {
-      const created = await createListing(payload);
-      toast(t('Listing added'), 'positive');
-      onCreated?.(created);
-    }
-    onClose();
-  }
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={editing ? t('Edit Listing') : t('New Listing')}
-      footer={
-        <>
-          <button className="btn-outline" onClick={onClose}>
-            {t('Cancel')}
-          </button>
-          <button className="btn-primary" onClick={submit}>
-            {editing ? t('Save') : t('Add')}
-          </button>
-        </>
-      }
-    >
-      <div className="space-y-3">
-        <Field label={t('Name')}>
-          <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={t('e.g. UK shop confetti basket')} />
-        </Field>
-        <Field label={t('Image')}>
-          <ImagePicker value={imageUrl} onChange={setImageUrl} />
-        </Field>
-        <Field label={t('Etsy link')}>
-          <input className="input" value={etsyUrl} onChange={(e) => setEtsyUrl(e.target.value)} placeholder="https://www.etsy.com/listing/…" />
-        </Field>
-        <Field label={t('Note')}>
-          <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </Field>
-      </div>
-    </Modal>
-  );
-}
-
-export function NewListingButton({ className = 'btn-primary', onCreated }: { className?: string; onCreated?: (l: Listing) => void }) {
-  const [open, setOpen] = useState(false);
-  const { t } = useLang();
-  return (
-    <>
-      <button className={className} onClick={() => setOpen(true)}>
-        + {t('New Listing')}
-      </button>
-      <ListingForm open={open} onClose={() => setOpen(false)} onCreated={onCreated} />
-    </>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Entry modal — the core "what did I change today" record.
-// ---------------------------------------------------------------------------
-
-export function EntryModal({
-  open,
-  onClose,
-  fixedListingId,
-  action,
-}: {
-  open: boolean;
-  onClose: () => void;
-  fixedListingId?: string;
-  action?: Action;
-}) {
-  const toast = useToast();
-  const { t } = useLang();
-  const listings = useLiveQuery(() => getDB().listings.orderBy('updatedAt').reverse().toArray(), [], [] as Listing[]);
-  const editing = !!action;
-
-  const [listingId, setListingId] = useState('');
-  const [types, setTypes] = useState<string[]>([]);
-  const [note, setNote] = useState('');
-  const [linkUrl, setLinkUrl] = useState('');
-  const [linkName, setLinkName] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-  const [date, setDate] = useState(todayISO());
-  const [showNew, setShowNew] = useState(false);
-
-  const key = (action?.id ?? 'new') + (fixedListingId ?? '');
-  const [lastKey, setLastKey] = useState<string | null>(null);
-  if (open && key !== lastKey) {
-    setLastKey(key);
-    setListingId(action?.listingId ?? fixedListingId ?? '');
-    setTypes(action?.types ?? (action?.type ? [action.type] : []));
-    setNote(action?.reason ?? '');
-    setLinkUrl(action?.linkUrl ?? '');
-    setLinkName(action?.linkName ?? '');
-    setImageUrl(action?.imageUrl ?? '');
-    setDate(action?.date ?? todayISO());
-  }
-  if (!open && lastKey !== null) setLastKey(null);
-
-  function toggleType(x: string) {
-    setTypes((cur) => (cur.includes(x) ? cur.filter((c) => c !== x) : [...cur, x]));
-  }
-
-  async function submit() {
-    const lid = fixedListingId ?? listingId;
-    if (!lid) {
-      toast(t('Pick a listing first'), 'danger');
-      return;
-    }
-    if (types.length === 0 && !note.trim()) {
-      toast(t('Tick what changed, or write a note'), 'danger');
-      return;
-    }
-    if (editing && action) {
-      await updateAction(action.id, {
-        date,
-        types,
-        reason: note.trim() || undefined,
-        linkUrl: linkUrl.trim() || undefined,
-        linkName: linkName.trim() || undefined,
-        imageUrl: imageUrl.trim() || undefined,
-      });
-      toast(t('Saved'), 'positive');
-    } else {
-      await addAction({
-        listingId: lid,
-        date,
-        types,
-        reason: note.trim() || undefined,
-        linkUrl: linkUrl.trim() || undefined,
-        linkName: linkName.trim() || undefined,
-        imageUrl: imageUrl.trim() || undefined,
-      });
-      const n = await countTodayRecords();
-      toast(`${t('Recorded')} · ${t('#{n} today').replace('{n}', String(n))}`, 'positive');
-    }
-    onClose();
-  }
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={editing ? t('Edit entry') : t('Record a change')}
-      footer={
-        <>
-          <button className="btn-outline" onClick={onClose}>
-            {t('Cancel')}
-          </button>
-          <button className="btn-primary" onClick={submit}>
-            {editing ? t('Save') : t('Record')}
-          </button>
-        </>
-      }
-    >
-      <div className="space-y-3">
-        {!fixedListingId && (
-          <Field label={t('Listing')}>
-            <div className="flex gap-2">
-              <select className="input" value={listingId} onChange={(e) => setListingId(e.target.value)}>
-                <option value="">{t('— select —')}</option>
-                {(listings ?? []).map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.listingName}
-                  </option>
-                ))}
-              </select>
-              <button type="button" className="btn-outline shrink-0" onClick={() => setShowNew(true)}>
-                + {t('New')}
-              </button>
-            </div>
-          </Field>
-        )}
-
-        <Field label={t('What changed')} hint={t('Tick any that apply')}>
-          <div className="flex flex-wrap gap-1.5">
-            {ACTION_TYPES.map((x) => (
-              <button key={x} type="button" onClick={() => toggleType(x)} className={types.includes(x) ? 'btn-primary btn-xs' : 'btn-outline btn-xs'}>
-                {x}
-              </button>
-            ))}
-          </div>
-        </Field>
-
-        <Field label={t('Note')}>
-          <textarea
-            className="input min-h-[64px]"
-            autoFocus
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder={t('What did you change and why…')}
-          />
-        </Field>
-
-        <div className="grid grid-cols-3 gap-3">
-          <Field label={t('Link name')} className="col-span-1">
-            <input className="input" value={linkName} onChange={(e) => setLinkName(e.target.value)} placeholder={t('e.g. new main image')} />
-          </Field>
-          <Field label={t('Link (URL)')} className="col-span-2">
-            <input className="input" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://…" />
-          </Field>
-        </div>
-
-        <Field label={t('Image (optional)')}>
-          <ImagePicker value={imageUrl} onChange={setImageUrl} />
-        </Field>
-
-        <Field label={t('Date')}>
-          <DateInput value={date} onChange={setDate} />
-        </Field>
-      </div>
-
-      <ListingForm
-        open={showNew}
-        onClose={() => setShowNew(false)}
-        onCreated={(l) => {
-          setListingId(l.id);
-          setShowNew(false);
-        }}
-      />
-    </Modal>
-  );
-}
-
-/** Global "+ Record" button (no preselected listing). */
-export function AddEntryButton({ className = 'btn-primary' }: { className?: string }) {
-  const [open, setOpen] = useState(false);
-  const { t } = useLang();
-  return (
-    <>
-      <button className={className} onClick={() => setOpen(true)}>
-        + {t('Record')}
-      </button>
-      <EntryModal open={open} onClose={() => setOpen(false)} />
-    </>
-  );
-}
-
-/** "+ Record" button bound to one listing. */
-export function RecordButton({ listingId, className = 'btn-primary btn-xs' }: { listingId: string; className?: string }) {
-  const [open, setOpen] = useState(false);
-  const { t } = useLang();
-  return (
-    <>
-      <button className={className} onClick={() => setOpen(true)}>
-        + {t('Record')}
-      </button>
-      <EntryModal open={open} onClose={() => setOpen(false)} fixedListingId={listingId} />
-    </>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Metrics input — type the raw numbers Etsy shows; CTR & CVR auto-compute.
+// Metrics input (shared by Snapshot + Experiment conclude).
+// You only type the RAW numbers Etsy shows you; CTR & CVR are auto-computed.
 // ---------------------------------------------------------------------------
 
 const RAW_FIELDS: { key: keyof Metrics; label: string; hint: string; step?: string }[] = [
@@ -435,6 +128,7 @@ function MetricsInput({ value, onChange }: { value: Metrics; onChange: (m: Metri
   const { t } = useLang();
   function setRaw(key: keyof Metrics, raw: string) {
     const next: Metrics = { ...value, [key]: parseNum(raw) };
+    // CTR / CVR are always derived from the raw counts.
     next.ctr = computeCtr(next);
     next.cvr = computeCvr(next);
     onChange(next);
@@ -474,47 +168,199 @@ function MetricsInput({ value, onChange }: { value: Metrics; onChange: (m: Metri
 }
 
 // ---------------------------------------------------------------------------
-// Data (metrics) modal.
+// Image picker — drag / paste / click to upload (stored as a compact data URL),
+// or paste an image URL.
 // ---------------------------------------------------------------------------
 
-export function DataModal({
+function ImagePicker({
+  value,
+  onChange,
+  label,
+  hint,
+  urlPlaceholder,
+  busyText,
+  dropText,
+  removeText,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  label: string;
+  hint: string;
+  urlPlaceholder: string;
+  busyText: string;
+  dropText: string;
+  removeText: string;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [drag, setDrag] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+
+  async function handleFile(file: File) {
+    setBusy(true);
+    try {
+      const url = await imageFileToDataUrl(file);
+      onChange(url);
+    } catch {
+      toast('无法读取该图片', 'danger');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Field label={label} hint={hint}>
+      <div
+        tabIndex={0}
+        onClick={() => fileRef.current?.click()}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDrag(true);
+        }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDrag(false);
+          const f = extractImageFile(e.dataTransfer);
+          if (f) handleFile(f);
+        }}
+        onPaste={(e) => {
+          const f = extractImageFile(e.clipboardData);
+          if (f) {
+            e.preventDefault();
+            handleFile(f);
+          }
+        }}
+        className={cx(
+          'flex items-center gap-3 rounded-md border border-dashed p-3 cursor-pointer focus:outline-none',
+          drag ? 'border-accent bg-accent/5' : 'border-border',
+        )}
+      >
+        {value ? (
+          <img
+            src={value}
+            alt="preview"
+            className="h-16 w-16 shrink-0 rounded object-cover border border-border"
+            onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+          />
+        ) : (
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded bg-surface-2 text-2xl text-muted">
+            🖼
+          </div>
+        )}
+        <div className="text-xs text-muted">{busy ? busyText : dropText}</div>
+        {value && (
+          <button
+            type="button"
+            className="btn-ghost btn-xs text-danger ml-auto"
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange('');
+            }}
+          >
+            {removeText}
+          </button>
+        )}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            if (f) handleFile(f);
+          }}
+        />
+      </div>
+      <input
+        className="input mt-2"
+        value={value.startsWith('data:') ? '' : value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={urlPlaceholder}
+      />
+    </Field>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Listing create / edit
+// ---------------------------------------------------------------------------
+
+export function ListingForm({
   open,
   onClose,
-  fixedListingId,
+  listing,
 }: {
   open: boolean;
   onClose: () => void;
-  fixedListingId?: string;
+  listing?: Listing;
 }) {
+  const settings = useSettings();
   const toast = useToast();
   const { t } = useLang();
-  const listings = useLiveQuery(() => getDB().listings.orderBy('updatedAt').reverse().toArray(), [], [] as Listing[]);
-  const [listingId, setListingId] = useState('');
-  const [metrics, setMetrics] = useState<Metrics>({});
-  const [note, setNote] = useState('');
-  const [date, setDate] = useState(todayISO());
-  const [showNew, setShowNew] = useState(false);
+  const editing = !!listing;
+  const [form, setForm] = useState(() => ({
+    listingName: listing?.listingName ?? '',
+    etsyUrl: listing?.etsyUrl ?? '',
+    imageUrl: listing?.imageUrl ?? '',
+    shopName: listing?.shopName ?? settings.defaultShop ?? '',
+    publishDate: listing?.publishDate ?? '',
+    currentPrice: listing?.currentPrice?.toString() ?? '',
+    adEnabled: listing?.adEnabled ?? false,
+    adStrategy: (listing?.adStrategy ?? 'Greater visibility') as AdStrategy,
+    status: listing?.status ?? 'New',
+    priority: (listing?.priority ?? 3) as Priority,
+    notes: listing?.notes ?? '',
+  }));
 
-  const key = fixedListingId ?? 'global';
-  const [lastKey, setLastKey] = useState<string | null>(null);
+  // Reset the form whenever the modal is (re)opened for a different listing.
+  const key = listing?.id ?? 'new';
+  const [lastKey, setLastKey] = useState(key);
   if (open && key !== lastKey) {
     setLastKey(key);
-    setListingId(fixedListingId ?? '');
-    setMetrics({});
-    setNote('');
-    setDate(todayISO());
+    setForm({
+      listingName: listing?.listingName ?? '',
+      etsyUrl: listing?.etsyUrl ?? '',
+      imageUrl: listing?.imageUrl ?? '',
+      shopName: listing?.shopName ?? settings.defaultShop ?? '',
+      publishDate: listing?.publishDate ?? '',
+      currentPrice: listing?.currentPrice?.toString() ?? '',
+      adEnabled: listing?.adEnabled ?? false,
+      adStrategy: (listing?.adStrategy ?? 'Greater visibility') as AdStrategy,
+      status: listing?.status ?? 'New',
+      priority: (listing?.priority ?? 3) as Priority,
+      notes: listing?.notes ?? '',
+    });
   }
-  if (!open && lastKey !== null) setLastKey(null);
+
+  const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
 
   async function submit() {
-    const lid = fixedListingId ?? listingId;
-    if (!lid) {
-      toast(t('Pick a listing first'), 'danger');
+    if (!form.listingName.trim()) {
+      toast('Listing name is required', 'danger');
       return;
     }
-    await addSnapshot({ listingId: lid, date, ...metrics, notes: note.trim() || undefined });
-    const n = await countTodayRecords();
-    toast(`${t('Recorded')} · ${t('#{n} today').replace('{n}', String(n))}`, 'positive');
+    const payload = {
+      listingName: form.listingName.trim(),
+      etsyUrl: form.etsyUrl.trim() || undefined,
+      imageUrl: form.imageUrl.trim() || undefined,
+      shopName: form.shopName.trim() || undefined,
+      publishDate: form.publishDate || undefined,
+      currentPrice: parseNum(form.currentPrice),
+      adEnabled: form.adEnabled,
+      adStrategy: form.adEnabled ? form.adStrategy : undefined,
+      status: form.status,
+      priority: form.priority,
+      notes: form.notes.trim() || undefined,
+    };
+    if (editing && listing) {
+      await updateListing(listing.id, payload);
+      toast('Listing updated', 'positive');
+    } else {
+      await createListing(payload);
+      toast('Listing added', 'positive');
+    }
     onClose();
   }
 
@@ -523,84 +369,709 @@ export function DataModal({
       open={open}
       onClose={onClose}
       wide
-      title={t('Record data')}
+      title={editing ? t('Edit Listing') : t('New Listing')}
       footer={
         <>
           <button className="btn-outline" onClick={onClose}>
             {t('Cancel')}
           </button>
           <button className="btn-primary" onClick={submit}>
-            {t('Record')}
+            {editing ? t('Save') : t('Add Listing')}
           </button>
         </>
       }
     >
       <div className="space-y-3">
-        {!fixedListingId && (
-          <Field label={t('Listing')}>
-            <div className="flex gap-2">
-              <select className="input" value={listingId} onChange={(e) => setListingId(e.target.value)}>
-                <option value="">{t('— select —')}</option>
-                {(listings ?? []).map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.listingName}
-                  </option>
-                ))}
-              </select>
-              <button type="button" className="btn-outline shrink-0" onClick={() => setShowNew(true)}>
-                + {t('New')}
-              </button>
-            </div>
-          </Field>
-        )}
-        <p className="text-xs text-muted">{t('Just copy the numbers Etsy shows you — every field is optional. CTR and CVR are calculated for you.')}</p>
-        <MetricsInput value={metrics} onChange={setMetrics} />
+        <Field label={t('Listing Name *')}>
+          <input
+            className="input"
+            autoFocus
+            value={form.listingName}
+            onChange={(e) => set({ listingName: e.target.value })}
+            placeholder="Personalized Nursery Basket"
+          />
+        </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label={t('Date')}>
-            <DateInput value={date} onChange={setDate} />
+          <Field label={t('Shop')}>
+            <input className="input" value={form.shopName} onChange={(e) => set({ shopName: e.target.value })} />
           </Field>
-          <Field label={t('Note')}>
-            <input className="input" value={note} onChange={(e) => setNote(e.target.value)} />
+          <Field label={t('Etsy URL')}>
+            <input className="input" value={form.etsyUrl} onChange={(e) => set({ etsyUrl: e.target.value })} />
           </Field>
         </div>
+        <ImagePicker
+          value={form.imageUrl}
+          onChange={(v) => set({ imageUrl: v })}
+          label={t('图片 (Image)')}
+          hint={t('拖入 / 粘贴 / 点击上传,或在下方粘贴图片链接')}
+          urlPlaceholder={t('或粘贴图片链接 https://…')}
+          busyText={t('处理中…')}
+          dropText={t('拖入图片 / 粘贴 (Ctrl+V) / 点击上传')}
+          removeText={t('移除')}
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={t('Publish Date')} hint={t('Drives Listing Age')}>
+            <input
+              type="date"
+              className="input"
+              value={form.publishDate}
+              onChange={(e) => set({ publishDate: e.target.value })}
+            />
+          </Field>
+          <Field label={t('Price')}>
+            <input
+              type="number"
+              step="0.01"
+              className="input"
+              value={form.currentPrice}
+              onChange={(e) => set({ currentPrice: e.target.value })}
+            />
+          </Field>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={t('Status')}>
+            <select className="input" value={form.status} onChange={(e) => set({ status: e.target.value as any })}>
+              {LISTING_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {t(s)}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label={t('Priority')}>
+            <select
+              className="input"
+              value={form.priority}
+              onChange={(e) => set({ priority: Number(e.target.value) as Priority })}
+            >
+              {[1, 2, 3, 4, 5].map((p) => (
+                <option key={p} value={p}>
+                  P{p}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={t('Ads')}>
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                id="adEnabled"
+                type="checkbox"
+                checked={form.adEnabled}
+                onChange={(e) => set({ adEnabled: e.target.checked })}
+              />
+              <label htmlFor="adEnabled" className="text-sm">
+                {t('Ads enabled')}
+              </label>
+            </div>
+          </Field>
+          <Field label={t('Ad Strategy')}>
+            <select
+              className="input"
+              disabled={!form.adEnabled}
+              value={form.adStrategy}
+              onChange={(e) => set({ adStrategy: e.target.value as AdStrategy })}
+            >
+              {AD_STRATEGIES.map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        <Field label={t('Notes')}>
+          <textarea
+            className="input min-h-[70px]"
+            value={form.notes}
+            onChange={(e) => set({ notes: e.target.value })}
+          />
+        </Field>
       </div>
-
-      <ListingForm
-        open={showNew}
-        onClose={() => setShowNew(false)}
-        onCreated={(l) => {
-          setListingId(l.id);
-          setShowNew(false);
-        }}
-      />
     </Modal>
   );
 }
 
-/** Global "+ Data" button (no preselected listing). */
-export function AddDataButton({ className = 'btn-outline' }: { className?: string }) {
+export function NewListingButton({ className = 'btn-primary' }: { className?: string }) {
   const [open, setOpen] = useState(false);
   const { t } = useLang();
   return (
     <>
       <button className={className} onClick={() => setOpen(true)}>
-        + {t('Data')}
+        {t('+ New Listing')}
       </button>
-      <DataModal open={open} onClose={() => setOpen(false)} />
+      <ListingForm open={open} onClose={() => setOpen(false)} />
     </>
   );
 }
 
-/** "+ Data" button bound to one listing. */
-export function RecordDataButton({ listingId, className = 'btn-outline btn-xs' }: { listingId: string; className?: string }) {
-  const [open, setOpen] = useState(false);
-  const { t } = useLang();
+// ---------------------------------------------------------------------------
+// Add Action
+// ---------------------------------------------------------------------------
+
+export function ActionModal({
+  open,
+  onClose,
+  listingId,
+  listingName,
+}: {
+  open: boolean;
+  onClose: () => void;
+  listingId: string;
+  listingName?: string;
+}) {
+  const settings = useSettings();
+  const toast = useToast();
+  const [types, setTypes] = useState<string[]>([]);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkName, setLinkName] = useState('');
+  const [note, setNote] = useState('');
+  const [date, setDate] = useState(todayISO());
+  const [reviewDays, setReviewDays] = useState<number | null>(settings.defaultReviewIntervalDays);
+
+  const [seeded, setSeeded] = useState(false);
+  if (open && !seeded) {
+    setSeeded(true);
+    setReviewDays(settings.defaultReviewIntervalDays);
+    setDate(todayISO());
+    setTypes([]);
+    setLinkUrl('');
+    setLinkName('');
+    setNote('');
+  }
+  if (!open && seeded) setSeeded(false);
+
+  function toggleType(t: string) {
+    setTypes((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]));
+  }
+
+  async function submit() {
+    await addAction({
+      listingId,
+      date,
+      types,
+      linkUrl: linkUrl.trim() || undefined,
+      linkName: linkName.trim() || undefined,
+      reason: note.trim() || undefined,
+      reviewAfterDays: reviewDays,
+    });
+    const n = await countTodayRecords();
+    toast(`已记录 · 今天第 ${n} 次`, 'positive');
+    onClose();
+  }
+
   return (
-    <>
-      <button className={className} onClick={() => setOpen(true)}>
-        + {t('Data')}
-      </button>
-      <DataModal open={open} onClose={() => setOpen(false)} fixedListingId={listingId} />
-    </>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={`记录动作${listingName ? ` — ${listingName}` : ''}`}
+      footer={
+        <>
+          <button className="btn-outline" onClick={onClose}>
+            取消
+          </button>
+          <button className="btn-primary" onClick={submit}>
+            记录
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <Field label="调整了什么" hint="可多选">
+          <div className="flex flex-wrap gap-1.5">
+            {ACTION_TYPES.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => toggleType(t)}
+                className={types.includes(t) ? 'btn-primary btn-xs' : 'btn-outline btn-xs'}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </Field>
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="链接名称" className="col-span-1">
+            <input className="input" value={linkName} onChange={(e) => setLinkName(e.target.value)} placeholder="新主图 v2" />
+          </Field>
+          <Field label="链接 (URL)" className="col-span-2">
+            <input className="input" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://…" />
+          </Field>
+        </div>
+        <Field label="备注">
+          <textarea
+            className="input min-h-[64px]"
+            value={note}
+            autoFocus
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="为什么这么改、想验证什么…"
+          />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="日期">
+            <DateInput value={date} onChange={setDate} />
+          </Field>
+          <Field label="下次复盘" hint="· 是你的默认间隔">
+            <ReviewIntervalPicker
+              value={reviewDays}
+              onChange={setReviewDays}
+              defaultDays={settings.defaultReviewIntervalDays}
+            />
+          </Field>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Add Snapshot
+// ---------------------------------------------------------------------------
+
+export function SnapshotModal({
+  open,
+  onClose,
+  listingId,
+  listingName,
+  prefill,
+}: {
+  open: boolean;
+  onClose: () => void;
+  listingId: string;
+  listingName?: string;
+  prefill?: Metrics;
+}) {
+  const toast = useToast();
+  const { t } = useLang();
+  const [metrics, setMetrics] = useState<Metrics>(prefill ?? {});
+  const [notes, setNotes] = useState('');
+  const [date, setDate] = useState(todayISO());
+
+  const [seeded, setSeeded] = useState(false);
+  if (open && !seeded) {
+    setSeeded(true);
+    setMetrics(prefill ?? {});
+    setDate(todayISO());
+  }
+  if (!open && seeded) setSeeded(false);
+
+  async function submit() {
+    await addSnapshot({ listingId, date, ...metrics, notes: notes.trim() || undefined });
+    const n = await countTodayRecords();
+    toast(`已记录快照 · 今天第 ${n} 次`, 'positive');
+    setNotes('');
+    onClose();
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      wide
+      title={`${t('Add Snapshot')}${listingName ? ` — ${listingName}` : ''}`}
+      footer={
+        <>
+          <button className="btn-outline" onClick={onClose}>
+            {t('Cancel')}
+          </button>
+          <button className="btn-primary" onClick={submit}>
+            {t('Save Snapshot')}
+          </button>
+        </>
+      }
+    >
+      <p className="mb-3 text-xs text-muted">
+        {t('Just copy the numbers Etsy shows you — every field is optional. CTR and CVR are calculated for you.')}
+      </p>
+      <MetricsInput value={metrics} onChange={setMetrics} />
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <Field label={t('Date')}>
+          <DateInput value={date} onChange={setDate} />
+        </Field>
+        <Field label={t('Notes')}>
+          <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </Field>
+      </div>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Complete Review
+// ---------------------------------------------------------------------------
+
+export function ReviewModal({
+  open,
+  onClose,
+  derived,
+}: {
+  open: boolean;
+  onClose: () => void;
+  derived: DerivedListing;
+}) {
+  const settings = useSettings();
+  const toast = useToast();
+  const [decision, setDecision] = useState<ReviewDecision>('Keep Current Setup');
+  const [note, setNote] = useState('');
+  const [date, setDate] = useState(todayISO());
+  const [reviewDays, setReviewDays] = useState<number | null>(settings.defaultReviewIntervalDays);
+
+  const [seeded, setSeeded] = useState(false);
+  if (open && !seeded) {
+    setSeeded(true);
+    setReviewDays(settings.defaultReviewIntervalDays);
+    setDecision('Keep Current Setup');
+    setNote('');
+    setDate(todayISO());
+  }
+  if (!open && seeded) setSeeded(false);
+
+  const m = derived.listing.currentMetrics;
+
+  async function submit() {
+    await completeReview({
+      listingId: derived.listing.id,
+      decision,
+      note: note.trim() || undefined,
+      nextReviewInDays: reviewDays,
+      date,
+    });
+    const n = await countTodayRecords();
+    toast(`已复盘 · 今天第 ${n} 次`, 'positive');
+    onClose();
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      wide
+      title={`Review — ${derived.listing.listingName}`}
+      footer={
+        <>
+          <button className="btn-outline" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn-primary" onClick={submit}>
+            Complete Review
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="grid grid-cols-4 gap-2 text-center">
+          {[
+            ['CTR', m.ctr !== undefined ? `${m.ctr}%` : '—'],
+            ['CVR', m.cvr !== undefined ? `${m.cvr}%` : '—'],
+            ['ROAS', m.roas ?? '—'],
+            ['Orders', m.orders ?? '—'],
+          ].map(([l, v]) => (
+            <div key={l} className="card px-2 py-2">
+              <div className="text-2xs uppercase text-muted">{l}</div>
+              <div className="text-lg font-semibold tnum">{String(v)}</div>
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-3 text-xs text-muted">
+          <div>
+            <span className="text-fg font-medium">Last action: </span>
+            {derived.lastAction
+              ? `${derived.lastAction.type} (${derived.daysSinceLastAction}d ago)`
+              : 'None yet'}
+          </div>
+          <div>
+            <span className="text-fg font-medium">Experiment: </span>
+            {derived.runningExperiment ? derived.runningExperiment.name : 'None running'}
+          </div>
+        </div>
+        <Field label="Decision" hint="“Keep Current Setup” is a valid, deliberate outcome — not doing anything is a decision.">
+          <div className="flex flex-wrap gap-1">
+            {REVIEW_DECISIONS.map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setDecision(d)}
+                className={decision === d ? 'btn-primary btn-xs' : 'btn-outline btn-xs'}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+        </Field>
+        <Field label="Review note">
+          <textarea className="input min-h-[60px]" value={note} onChange={(e) => setNote(e.target.value)} />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="复盘日期">
+            <DateInput value={date} onChange={setDate} />
+          </Field>
+          <Field label="Set next review in">
+            <ReviewIntervalPicker
+              value={reviewDays}
+              onChange={setReviewDays}
+              defaultDays={settings.defaultReviewIntervalDays}
+            />
+          </Field>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Start Experiment
+// ---------------------------------------------------------------------------
+
+export function ExperimentModal({
+  open,
+  onClose,
+  listingId,
+  listingName,
+  currentMetrics,
+}: {
+  open: boolean;
+  onClose: () => void;
+  listingId: string;
+  listingName?: string;
+  currentMetrics?: Metrics;
+}) {
+  const settings = useSettings();
+  const toast = useToast();
+  const [name, setName] = useState('');
+  const [hypothesis, setHypothesis] = useState('');
+  const [variable, setVariable] = useState<string>('Price');
+  const [beforeValue, setBefore] = useState('');
+  const [afterValue, setAfter] = useState('');
+  const [reviewDays, setReviewDays] = useState<number | null>(settings.defaultReviewIntervalDays);
+
+  const [seeded, setSeeded] = useState(false);
+  if (open && !seeded) {
+    setSeeded(true);
+    setReviewDays(settings.defaultReviewIntervalDays);
+  }
+  if (!open && seeded) setSeeded(false);
+
+  async function submit() {
+    if (!name.trim()) {
+      toast('Experiment name is required', 'danger');
+      return;
+    }
+    await createExperiment({
+      listingId,
+      name: name.trim(),
+      hypothesis: hypothesis.trim() || undefined,
+      variable,
+      beforeValue: beforeValue.trim() || undefined,
+      afterValue: afterValue.trim() || undefined,
+      reviewInDays: reviewDays,
+      beforeSnapshot: currentMetrics,
+    });
+    toast('Experiment started', 'positive');
+    setName('');
+    setHypothesis('');
+    setBefore('');
+    setAfter('');
+    onClose();
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      wide
+      title={`Start Experiment${listingName ? ` — ${listingName}` : ''}`}
+      footer={
+        <>
+          <button className="btn-outline" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn-primary" onClick={submit}>
+            Start Experiment
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <p className="text-xs text-muted">
+          Try to change only one main variable at a time so the result is readable.
+        </p>
+        <Field label="Name *">
+          <input
+            className="input"
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Price Test — $49.99 → $44.99"
+          />
+        </Field>
+        <Field label="Hypothesis">
+          <textarea
+            className="input min-h-[60px]"
+            value={hypothesis}
+            onChange={(e) => setHypothesis(e.target.value)}
+            placeholder="CTR is 3.4% but CVR is only 1.5% — a lower price may lift conversion."
+          />
+        </Field>
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="Variable">
+            <select className="input" value={variable} onChange={(e) => setVariable(e.target.value)}>
+              {ACTION_TYPES.map((t) => (
+                <option key={t}>{t}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Before">
+            <input className="input" value={beforeValue} onChange={(e) => setBefore(e.target.value)} />
+          </Field>
+          <Field label="After">
+            <input className="input" value={afterValue} onChange={(e) => setAfter(e.target.value)} />
+          </Field>
+        </div>
+        <Field label="Review in">
+          <ReviewIntervalPicker
+            value={reviewDays}
+            onChange={setReviewDays}
+            defaultDays={settings.defaultReviewIntervalDays}
+          />
+        </Field>
+        {currentMetrics && (
+          <p className="text-2xs text-muted">
+            Current metrics will be captured as the “before” snapshot (CTR {currentMetrics.ctr ?? '—'}%, CVR{' '}
+            {currentMetrics.cvr ?? '—'}%, ROAS {currentMetrics.roas ?? '—'}).
+          </p>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Conclude Experiment (Before / After)
+// ---------------------------------------------------------------------------
+
+const DIFF_ROWS: { key: keyof Metrics; label: string; digits: number }[] = [
+  { key: 'ctr', label: 'CTR %', digits: 2 },
+  { key: 'cvr', label: 'CVR %', digits: 2 },
+  { key: 'roas', label: 'ROAS', digits: 1 },
+  { key: 'orders', label: 'Orders', digits: 0 },
+  { key: 'revenue', label: 'Revenue', digits: 0 },
+];
+
+export function ConcludeExperimentModal({
+  open,
+  onClose,
+  experiment,
+  currentMetrics,
+}: {
+  open: boolean;
+  onClose: () => void;
+  experiment: Experiment;
+  currentMetrics?: Metrics;
+}) {
+  const toast = useToast();
+  const [after, setAfter] = useState<Metrics>(experiment.afterSnapshot ?? currentMetrics ?? {});
+  const [outcome, setOutcome] = useState<ExperimentStatus>('Positive');
+  const [conclusion, setConclusion] = useState(experiment.conclusion ?? '');
+  const [decision, setDecision] = useState(experiment.decision ?? '');
+
+  const [seeded, setSeeded] = useState(false);
+  if (open && !seeded) {
+    setSeeded(true);
+    setAfter(experiment.afterSnapshot ?? currentMetrics ?? {});
+    setConclusion(experiment.conclusion ?? '');
+    setDecision(experiment.decision ?? '');
+  }
+  if (!open && seeded) setSeeded(false);
+
+  const before = experiment.beforeSnapshot ?? {};
+
+  async function submit() {
+    await concludeExperiment(experiment.id, outcome, {
+      afterSnapshot: after,
+      conclusion: conclusion.trim() || undefined,
+      decision: decision.trim() || undefined,
+    });
+    toast('Experiment concluded', 'positive');
+    onClose();
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      wide
+      title={`Conclude — ${experiment.name}`}
+      footer={
+        <>
+          <button className="btn-outline" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn-primary" onClick={submit}>
+            Save Conclusion
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div>
+          <div className="label">After metrics</div>
+          <MetricsInput value={after} onChange={setAfter} />
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-muted">
+                <th className="th">Metric</th>
+                <th className="th text-right">Before</th>
+                <th className="th text-right">After</th>
+                <th className="th text-right">Δ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {DIFF_ROWS.map((r) => {
+                const b = before[r.key];
+                const a = after[r.key];
+                const d = b !== undefined && a !== undefined ? a - b : undefined;
+                return (
+                  <tr key={r.key} className="border-b border-border/60">
+                    <td className="td">{r.label}</td>
+                    <td className="td text-right tnum">{fmtNum(b, r.digits)}</td>
+                    <td className="td text-right tnum">{fmtNum(a, r.digits)}</td>
+                    <td
+                      className={
+                        'td text-right tnum font-medium ' +
+                        (d === undefined ? '' : d > 0 ? 'text-positive' : d < 0 ? 'text-danger' : 'text-muted')
+                      }
+                    >
+                      {fmtDiff(b, a, r.digits)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <Field label="Outcome">
+          <div className="flex gap-1">
+            {(['Positive', 'Neutral', 'Negative'] as ExperimentStatus[]).map((o) => (
+              <button
+                key={o}
+                type="button"
+                onClick={() => setOutcome(o)}
+                className={outcome === o ? 'btn-primary btn-xs' : 'btn-outline btn-xs'}
+              >
+                {o}
+              </button>
+            ))}
+          </div>
+        </Field>
+        <Field label="Conclusion">
+          <textarea className="input min-h-[60px]" value={conclusion} onChange={(e) => setConclusion(e.target.value)} />
+        </Field>
+        <Field label="Next decision" hint="e.g. Keep new price / Restore previous price">
+          <input className="input" value={decision} onChange={(e) => setDecision(e.target.value)} />
+        </Field>
+      </div>
+    </Modal>
   );
 }
