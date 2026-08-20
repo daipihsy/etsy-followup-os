@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { bulkUpdate, type BulkPatch } from '@/lib/repo';
 import { AD_STRATEGIES, LISTING_STATUSES, type AdStrategy, type ListingStatus, type Priority } from '@/lib/types';
 import { Modal, Field, useToast } from './ui';
+import { useLang } from './lang';
 
 export function BulkBar({
   ids,
@@ -13,6 +14,7 @@ export function BulkBar({
   onClear: () => void;
 }) {
   const toast = useToast();
+  const { t } = useLang();
   const [modal, setModal] = useState<null | string>(null);
   const [status, setStatus] = useState<ListingStatus>('Follow-up');
   const [priority, setPriority] = useState<Priority>(3);
@@ -71,10 +73,12 @@ export function BulkBar({
           </>
         }
       >
-        <Field label="Status">
+        <Field label={t('Status')}>
           <select className="input" value={status} onChange={(e) => setStatus(e.target.value as ListingStatus)}>
             {LISTING_STATUSES.map((s) => (
-              <option key={s}>{s}</option>
+              <option key={s} value={s}>
+                {t(s)}
+              </option>
             ))}
           </select>
         </Field>

@@ -412,7 +412,9 @@ export function ListingForm({
           <Field label={t('Status')}>
             <select className="input" value={form.status} onChange={(e) => set({ status: e.target.value as any })}>
               {LISTING_STATUSES.map((s) => (
-                <option key={s}>{s}</option>
+                <option key={s} value={s}>
+                  {t(s)}
+                </option>
               ))}
             </select>
           </Field>

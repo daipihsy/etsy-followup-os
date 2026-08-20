@@ -13,6 +13,7 @@ import { parseNum } from '@/lib/util';
 import { saveFilter, deleteSavedFilter } from '@/lib/repo';
 import type { SavedFilter, Settings } from '@/lib/types';
 import { Field } from './ui';
+import { useLang } from './lang';
 import { cx } from '@/lib/util';
 
 const AGE_STAGES: AgeStage[] = ['New', 'Early', 'Growing', 'Mature'];
@@ -94,6 +95,7 @@ export function FiltersPanel({
   settings: Settings;
 }) {
   const [open, setOpen] = useState(false);
+  const { t } = useLang();
   const set = (patch: Partial<FilterState>) => onChange({ ...filter, ...patch });
   const activeCount = countActiveFilters(filter);
 
@@ -114,23 +116,23 @@ export function FiltersPanel({
       <div className="flex flex-wrap items-center gap-2 p-2">
         <input
           className="input max-w-xs"
-          placeholder="Search name, shop, category, tag, id…"
+          placeholder={t('Search name, shop, category, tag, id…')}
           value={filter.search}
           onChange={(e) => set({ search: e.target.value })}
         />
         <button className="btn-outline btn-xs" onClick={() => setOpen((v) => !v)}>
-          Filters {activeCount > 0 ? `(${activeCount})` : ''} {open ? '▴' : '▾'}
+          {t('Filters')} {activeCount > 0 ? `(${activeCount})` : ''} {open ? '▴' : '▾'}
         </button>
         {activeCount > 0 && (
           <button className="btn-ghost btn-xs" onClick={() => onChange(EMPTY_FILTER)}>
-            Clear all
+            {t('Clear all')}
           </button>
         )}
         <div className="ml-auto flex flex-wrap items-center gap-1">
-          <span className="text-2xs text-muted">Presets:</span>
+          <span className="text-2xs text-muted">{t('Presets:')}</span>
           {PRESETS.map((p) => (
             <button key={p.name} className="btn-ghost btn-xs" onClick={() => onChange(p.build(presetOpts))}>
-              {p.name}
+              {t(p.name)}
             </button>
           ))}
         </div>
@@ -138,7 +140,7 @@ export function FiltersPanel({
 
       {savedFilters.length > 0 && (
         <div className="flex flex-wrap items-center gap-1 border-t border-border px-2 py-1.5">
-          <span className="text-2xs text-muted">Saved:</span>
+          <span className="text-2xs text-muted">{t('Saved:')}</span>
           {savedFilters.map((sf) => (
             <span key={sf.id} className="inline-flex items-center gap-1 rounded bg-surface-2 px-1.5 py-0.5 text-xs">
               <button onClick={() => onChange({ ...EMPTY_FILTER, ...(sf.filter as FilterState) })} className="hover:text-accent">
@@ -156,17 +158,17 @@ export function FiltersPanel({
         <div className="border-t border-border p-3 space-y-4">
           <div className="flex flex-wrap gap-4">
             <div>
-              <div className="label">Status</div>
+              <div className="label">{t('Status')}</div>
               <div className="flex flex-wrap gap-1">
                 {LISTING_STATUSES.map((s) => (
                   <Chip key={s} active={filter.statuses.includes(s)} onClick={() => set({ statuses: toggle<ListingStatus>(filter.statuses, s) })}>
-                    {s}
+                    {t(s)}
                   </Chip>
                 ))}
               </div>
             </div>
             <div>
-              <div className="label">Priority</div>
+              <div className="label">{t('Priority')}</div>
               <div className="flex flex-wrap gap-1">
                 {[1, 2, 3, 4, 5].map((p) => (
                   <Chip key={p} active={filter.priorities.includes(p as Priority)} onClick={() => set({ priorities: toggle<Priority>(filter.priorities, p as Priority) })}>
@@ -176,11 +178,11 @@ export function FiltersPanel({
               </div>
             </div>
             <div>
-              <div className="label">Age stage</div>
+              <div className="label">{t('Age stage')}</div>
               <div className="flex flex-wrap gap-1">
                 {AGE_STAGES.map((a) => (
                   <Chip key={a} active={filter.ageStages.includes(a)} onClick={() => set({ ageStages: toggle<AgeStage>(filter.ageStages, a) })}>
-                    {a}
+                    {t(a)}
                   </Chip>
                 ))}
               </div>
@@ -191,7 +193,7 @@ export function FiltersPanel({
             <div className="flex flex-wrap gap-4">
               {shops.length > 0 && (
                 <div>
-                  <div className="label">Shop</div>
+                  <div className="label">{t('Shop')}</div>
                   <div className="flex flex-wrap gap-1">
                     {shops.map((s) => (
                       <Chip key={s} active={filter.shops.includes(s)} onClick={() => set({ shops: toggle(filter.shops, s) })}>
@@ -203,7 +205,7 @@ export function FiltersPanel({
               )}
               {categories.length > 0 && (
                 <div>
-                  <div className="label">Category</div>
+                  <div className="label">{t('Category')}</div>
                   <div className="flex flex-wrap gap-1">
                     {categories.map((c) => (
                       <Chip key={c} active={filter.categories.includes(c)} onClick={() => set({ categories: toggle(filter.categories, c) })}>
@@ -218,17 +220,17 @@ export function FiltersPanel({
 
           <div className="flex flex-wrap gap-4">
             <div>
-              <div className="label">Ads</div>
+              <div className="label">{t('Ads')}</div>
               <div className="flex gap-1">
                 {(['any', 'on', 'off'] as const).map((v) => (
                   <Chip key={v} active={filter.ad === v} onClick={() => set({ ad: v })}>
-                    {v === 'any' ? 'Any' : v === 'on' ? 'On' : 'Off'}
+                    {v === 'any' ? t('Any') : v === 'on' ? t('On') : t('Off')}
                   </Chip>
                 ))}
               </div>
             </div>
             <div>
-              <div className="label">Ad strategy</div>
+              <div className="label">{t('Ad strategy')}</div>
               <div className="flex flex-wrap gap-1">
                 {AD_STRATEGIES.map((s) => (
                   <Chip key={s} active={filter.adStrategies.includes(s)} onClick={() => set({ adStrategies: toggle<AdStrategy>(filter.adStrategies, s) })}>
@@ -239,11 +241,11 @@ export function FiltersPanel({
             </div>
             {tags.length > 0 && (
               <div>
-                <div className="label">Tags (all)</div>
+                <div className="label">{t('Tags (all)')}</div>
                 <div className="flex flex-wrap gap-1">
-                  {tags.map((t) => (
-                    <Chip key={t} active={filter.tags.includes(t)} onClick={() => set({ tags: toggle(filter.tags, t) })}>
-                      {t}
+                  {tags.map((tg) => (
+                    <Chip key={tg} active={filter.tags.includes(tg)} onClick={() => set({ tags: toggle(filter.tags, tg) })}>
+                      {tg}
                     </Chip>
                   ))}
                 </div>
@@ -288,7 +290,7 @@ export function FiltersPanel({
 
           <div className="flex justify-end">
             <button className="btn-outline btn-xs" onClick={handleSave}>
-              Save current filter
+              {t('Save current filter')}
             </button>
           </div>
         </div>
