@@ -13,6 +13,8 @@
 1. **今天我该处理哪些 Listing？**
 2. **我对每条 Listing 做了什么改动、它的数据怎么变化？**
 
+并且：**我只负责“最简单地记录”，深度分析交给 AI**——软件接入我自己的大模型 API，基于我记录的数据给出尽可能详细的诊断、趋势解读、今日行动建议（见 §6.8）。分析越详细越好，但**执行永远由我决定**。
+
 ---
 
 ## 1. 真实使用场景（务必理解，避免做成 ERP）
@@ -69,7 +71,7 @@ CTR 不错 → 进入观察 → 判断转化/订单/ROAS → 发现问题或机�
 
 ## 4. 信息架构（页面）
 
-顶层导航（桌面左侧栏）：**Today / Dashboard / Pipeline / Experiments / Analytics / Settings**。启动默认进入 **Today**。
+顶层导航（桌面左侧栏）：**Today / Dashboard / Pipeline / Experiments / Analytics / AI 分析中心 / Settings**。启动默认进入 **Today**。（AI 分析中心 = 今日简报/全店诊断/问答/周报的集中入口，见 §6.8。）
 
 > 备注：若团队希望更“轻”，可将 Today 合并为一个“日志/今日”首页（时间线 + 待办），把 Dashboard 作为总览。但本规格默认保留下述六页。
 
@@ -199,9 +201,18 @@ CTR 不错 → 进入观察 → 判断转化/订单/ROAS → 发现问题或机�
 | theme | dark | dark/light |
 | lang | en | en/zh（界面语言） |
 | matrixCtrThreshold / matrixCvrThreshold | 2.5 / 3.0 | 商品矩阵象限阈值 |
+| aiBaseUrl | https://api.openai.com/v1 | AI endpoint（OpenAI 兼容，可改） |
+| aiModel | '' | 模型名（用户手填，如 gpt-5.6-sol） |
+| aiKey | '' | AI API Key（仅存本机） |
+| aiLang | zh | AI 分析输出语言 |
+
+> AI 配置细节见 §6.8。Key 与 GitHub token 一样：仅存本机、只发所配置 endpoint。
 
 ### 5.7 SavedFilter（保存的筛选器）
 `{ id, name, filter(序列化的筛选状态), createdAt }`
+
+### 5.10 AiInsight（AI 分析结果，见 §6.8.E 字段表）
+保存每次 AI 分析的结果，便于回看、避免重复调用。
 
 ### 5.8 枚举
 - **AdStrategy**（Etsy 官方措辞）：`Greater visibility` / `Efficient spending` / `Lower click cost`
@@ -261,6 +272,56 @@ CTR 不错 → 进入观察 → 判断转化/订单/ROAS → 发现问题或机�
 
 ---
 
+## 6.8 AI 深度分析（接入你的大模型 API，越详细越好）★核心
+
+目标：**我把日常记录做到最简单，分析交给 AI，越详细越好。** 软件接入用户自己的大模型 API（用户当前有 **“GPT 5.6 Sol”** 的 API；实现时**不要写死某个模型**，做成可配置，兼容任意 OpenAI 风格接口）。基于我记录的数据做深度分析、诊断、给建议。
+**AI 只分析和建议，不自动改价/改广告/发布**——最终执行仍由我决定（保住“软件建议、我决策”这条主线）。
+
+### A. 接入配置（BYO Key，存本机）
+Settings 增加“AI 分析”区块，字段：
+- **Base URL**：OpenAI 兼容 endpoint，默认 `https://api.openai.com/v1`，可改成任意兼容服务/自建代理。
+- **API Key**：仅存本机（同 GitHub token 的处理方式），只发往所配置 endpoint 的 `Authorization` 头。
+- **Model**：模型名，用户手填（例如 `gpt-5.6-sol` 或其它，用户输入什么就用什么）。
+- 可选：temperature、max tokens、分析输出语言（中/英）。
+- 未配置时，AI 功能隐藏/禁用，其余功能照常。
+
+> **桌面版优势**：Tauri/Electron 从原生/后端侧发请求，**没有浏览器 CORS 限制**，可直接调用任意 API。纯网页版需 endpoint 支持 CORS 或自建代理。**故 AI 分析强烈建议在桌面版实现。**
+
+### B. 请求与落库
+- 用 **OpenAI 兼容 Chat Completions**：`POST {baseURL}/chat/completions`，`Authorization: Bearer <key>`，body 含 `model`、`messages`（可加 `response_format: json`/在 system 里约束输出结构，便于解析为“建议卡片”）。可流式显示。
+- 软件负责把**结构化上下文**塞进 prompt：所选 Listing 的资料 + 全部数据快照（按时间序）+ 改动记录 + 实验；或全店聚合。**只发所需数据，由用户点击触发。**
+- 结果存为 `AiInsight`（见 §5.10），带时间戳，便于回看、避免重复调用、省 token；可“重新分析”。
+
+### C. 分析能力（都要做，越细越好）
+1. **单条 Listing 深度诊断**（详情页“AI 分析”按钮）：现状总结；CTR/CVR/ROAS/订单的**趋势解读**（在涨/在跌/波动 + 可能原因）；**诊断**（如“高 CTR 低 CVR → 可能是价格/主图/详情/评价问题”，并结合我最近的改动判断哪次改动起了作用）；**下一步建议（2–4 条，排序）**，每条含理由、预期影响、建议复盘时间，并提醒“一次只改一个变量”。建议输出结构：`{summary, trend, diagnosis, recommendations[], watch, suggestedReviewInDays}`。
+2. **今日简报 / 全店分析**（Today 或独立“AI 分析中心”页）：跨所有 Listing 汇总——今天优先处理谁、为什么；谁在涨/在跌；哪些是“被忽略的赢家”；给出**今日行动清单（3–7 条，按优先级）**。这是“简化流程”的核心：不用我盯 Dashboard，AI 直接告诉我今天做什么。
+3. **改动效果评估**：取某条改动前后的数据快照，AI 判断“是否见效”，给归因与结论。
+4. **实验解读**：读 Before/After，自动写结论 + 建议决定（保留/回退/放大）。
+5. **打法库洞察**：挖掘我全部实验，总结“对我的店，改什么最能拉动 CTR/CVR”，形成可复用规律。
+6. **问答（Chat）**：对话框，用自然语言问（“为什么这条转化低?”“这周重点做什么?”），AI 基于我记录的数据作答并可引用具体数字。
+7. **周报**：一键生成本周运营周报（做了什么、数据怎么变、下周计划）。
+
+### D. 交互与安全
+- 每个 AI 入口都**用户点击触发**（不自动、不后台偷偷发数据）。首次调用前提示“将把这条/这批数据发送到你配置的 AI 服务”。
+- Key 只存本机、只发所配置 endpoint；不入 URL、不发第三方、不随日志输出。
+- 有 loading/流式状态；失败有明确报错（额度/网络/鉴权）。
+- 成本提示：按模型计费，建议按需分析。
+
+### E. AiInsight 数据模型（补充到 §5）
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | string | |
+| scope | 'listing' \| 'shop' \| 'experiment' \| 'chat' | 分析范围 |
+| listingId | string? | 针对单条时 |
+| kind | string | diagnosis / daily-brief / change-impact / experiment / playbook / weekly / chat |
+| model | string | 使用的模型 |
+| inputSummary | string? | 发送了哪些数据（便于审计） |
+| content | string | AI 返回（Markdown 或 JSON 文本） |
+| structured | json? | 若返回结构化，解析后的对象 |
+| createdAt | string | |
+
+---
+
 ## 7. “今天已记录 N 次”计数
 统计**当天**新增的 Action + Snapshot + Review 的总数。每次记录后弹提示“已记录 · 今天第 N 次”，首页常驻显示。目的：让我有“我今天又跟进了一次”的即时反馈。
 
@@ -294,9 +355,10 @@ CTR 不错 → 进入观察 → 判断转化/订单/ROAS → 发现问题或机�
 ---
 
 ## 11. 明确不做（V1）
-- Etsy API / 订单同步 / 自动改价改广告 / 自动发布 / AI 自动优化。
+- Etsy API / 订单同步 / **自动**改价改广告 / 自动发布。
+  （注意：**AI 分析与建议是核心功能，见 §6.8**；但 AI 只“分析+建议”，**不自动执行**任何改价/改广告/发布，执行由用户手动完成。）
 - 账号系统 / 服务器端鉴权 / 多人实时协作（同步是单人多设备，最后写入者为准）。
-- 截图 OCR 自动填数（曾讨论，暂不做；数据由手动抄录）。
+- 截图 OCR 自动填数（曾讨论，暂不做；数据由手动抄录，再交给 AI 分析）。
 
 ---
 
@@ -312,11 +374,17 @@ CTR 不错 → 进入观察 → 判断转化/订单/ROAS → 发现问题或机�
 - [ ] 备份导出、导入（Merge/Replace）。
 - [ ] GitHub 同步：测试连接/上传/拉取/自动同步。
 - [ ] 中英切换、深浅主题。
-- [ ] 离线可用；数据仅在本机（+ 可选私有同步）。
+- [ ] **AI 配置**（Base URL/Model/Key）可保存；未配置时 AI 功能隐藏。
+- [ ] **AI 单条诊断**：详情页点“AI 分析”，把该 Listing 的数据快照+改动+实验发给模型，返回趋势解读+诊断+排序建议，并存为 AiInsight 可回看。
+- [ ] **AI 今日简报**：AI 分析中心生成“今天做什么”的行动清单。
+- [ ] **AI 问答**：可基于我的数据自然语言问答。
+- [ ] AI 调用有 loading/流式与错误处理；首次发送前有隐私提示；Key 仅本机。
+- [ ] 离线可用；数据仅在本机（+ 可选私有同步）。AI 功能需联网+Key，缺失时优雅降级。
 
 ---
 
 ## 13. 给 Codex 的实现提示
 - 优先复用参考仓库的领域逻辑（数据模型、CTR/CVR 计算、Attention Score、Untouched Winner、备份/同步）。
 - 若做桌面版：Tauri + 现有 React 组件 + SQLite；把现有 Dexie 仓库层替换为 SQLite 数据访问层，接口保持一致（createListing/addAction/addSnapshot/completeReview/experiment/backup/sync 等）。
-- 保持“**记录快、回看清、别像 ERP**”这条主线；任何新功能都不能拖慢“记录改动/记录数据”这两个高频动作。
+- **AI 分析（§6.8）是本次核心新增**：抽象一个 `AiClient`（OpenAI 兼容 chat/completions，可配置 baseURL/model/key），一个 `buildContext(scope)` 把本地数据整理成 prompt，一个 `analyze(kind, scope)` 返回并落库为 `AiInsight`。桌面版从原生/后端发请求以绕开 CORS。先做“单条诊断 + 今日简报 + 问答”，其余（改动效果/实验解读/打法库/周报）复用同一管线。
+- 保持“**记录快、回看清、别像 ERP**”这条主线；任何新功能都不能拖慢“记录改动/记录数据”这两个高频动作。**分析可以很重、很详细，但记录必须很轻。**
