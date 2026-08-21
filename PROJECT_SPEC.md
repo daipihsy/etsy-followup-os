@@ -13,7 +13,9 @@
 1. **今天我该处理哪些 Listing？**
 2. **我对每条 Listing 做了什么改动、它的数据怎么变化？**
 
-并且：**我只负责“最简单地记录”，深度分析交给 AI**——软件接入我自己的大模型 API，基于我记录的数据给出尽可能详细的诊断、趋势解读、今日行动建议（见 §6.8）。分析越详细越好，但**执行永远由我决定**。
+并且我要**尽量少动手**：
+- **录入交给 AI**：截个 Etsy 后台图丢进去，vision 模型识别、自动填好数字，我核对即存（见 §6.9）；也保留手填作兜底。
+- **分析交给 AI**：软件接入我自己的大模型 API，基于我记录的数据给出尽可能详细的诊断、趋势解读、今日行动建议（见 §6.8）。分析越详细越好，但**执行永远由我决定**。
 
 ---
 
@@ -153,7 +155,7 @@ CTR 不错 → 进入观察 → 判断转化/订单/ROAS → 发现问题或机�
 - **广告页（单条 Listing 的 Etsy Ads）**：Views→views、Clicks→clicks、Orders→orders、Revenue→revenue、Spend→adSpend、ROAS→roas。CTR 自动算（例：Clicks 23 / Views 587 = 3.9%）。
 - **店铺 Stats**：Visits→visits、Items sold→orders、Revenue→revenue。CVR 自动算（orders/visits）。
 
-**录入体验**：每个原始数字框下方标注它对应 Etsy 上的哪个字段；下方高亮显示自动算出的 CTR、CVR（只读）。所有字段可留空。**目标 20 秒内完成一次**。保存后把该 Snapshot 同步为 Listing.currentMetrics（取“最新一条”）。
+**录入体验**：两种方式并存——(1) **手填**：每个原始数字框下方标注它对应 Etsy 上的哪个字段；下方高亮显示自动算出的 CTR、CVR（只读）。(2) **截图识别（理想方式，见 §6.9）**：粘贴/拖入 Etsy 后台截图，vision 模型识别后自动回填，用户核对即存。所有字段可留空。**目标 20 秒内完成一次（截图识别可到几秒）**。保存后把该 Snapshot 同步为 Listing.currentMetrics（取“最新一条”）。
 
 **回看**：Listing 详情页要有一张**按天的“数据变化”表**（每行一天：日期/曝光/点击/CTR/访问/订单/CVR/营收/花费/ROAS），并可有 CTR/CVR/ROAS 的趋势折线图，让我一眼看到变化。
 
@@ -202,7 +204,8 @@ CTR 不错 → 进入观察 → 判断转化/订单/ROAS → 发现问题或机�
 | lang | en | en/zh（界面语言） |
 | matrixCtrThreshold / matrixCvrThreshold | 2.5 / 3.0 | 商品矩阵象限阈值 |
 | aiBaseUrl | https://api.openai.com/v1 | AI endpoint（OpenAI 兼容，可改） |
-| aiModel | '' | 模型名（用户手填，如 gpt-5.6-sol） |
+| aiModel | '' | 文本分析模型名（用户手填，如 gpt-5.6-sol） |
+| aiVisionModel | '' | 截图识别用的多模态模型名（需支持图片输入；可与 aiModel 相同）。见 §6.9 |
 | aiKey | '' | AI API Key（仅存本机） |
 | aiLang | zh | AI 分析输出语言 |
 
@@ -322,6 +325,51 @@ Settings 增加“AI 分析”区块，字段：
 
 ---
 
+## 6.9 AI 截图识别自动填数（Vision）★核心——理想的录入方式
+
+**我的理想：不手敲数字，直接把 Etsy 后台截个图丢进去，模型识别，自动把字段填好，我核对一下就保存。** 这是“简化流程”的关键，请务必实现；手填仍保留作为兜底。
+
+### A. 入口与流程
+- 在 **“记录数据”** 弹窗里，除了原始数字输入框，提供 **上传 / 粘贴(Ctrl+V) / 拖入 截图**（**支持一次多张**，例如同时贴“广告页 + 店铺 Stats”）。
+- 也可在“记录改动”里贴图，用同一管线让模型**猜测改了什么类别**（弱识别，可选）；但**数据识别是重点**。
+- 点击“识别”→ 调用 **vision 模型**（`aiVisionModel`）→ 返回结构化 JSON → **自动回填表单** → 前端自动算 CTR/CVR → 用户核对（可改）→ 保存。
+- 也支持“**识别 + 直接分析**”：识别出数据后顺带调用 §6.8 的诊断，一步到位。
+
+### B. 调用规格
+- OpenAI 兼容多模态 Chat Completions：`messages` 里放一段 system（要求**只输出 JSON、无解释**）+ 一条 user 含 `image_url`（图片用压缩后的 **base64 data URL**）。可传多张图。
+- 期望返回（缺失字段给 null）：
+  ```json
+  {
+    "listingGuess": "可选：从截图标题猜到的链接名",
+    "period": "可选：截图的时间范围文字",
+    "views": null, "clicks": null, "visits": null,
+    "orders": null, "revenue": null, "adSpend": null,
+    "roas": null, "favorites": null,
+    "sourceType": "ads | shopStats | unknown",
+    "confidence": 0.0
+  }
+  ```
+- 前端对返回做 **JSON 解析 + schema 校验**；失败重试一次；仍失败则提示并回退手填。**CTR/CVR 一律由前端用原始数字重新计算**（不信任模型算的百分比，避免幻觉）。
+
+### C. 识别两种 Etsy 版式（system prompt 要交代清楚）
+- **Etsy Ads 单条广告页**：`Views→views、Clicks→clicks、Orders→orders、Revenue→revenue、Spend→adSpend、ROAS→roas`，`sourceType=ads`。
+- **店铺 Stats（Shop Stats / Explore your data）**：`Visits→visits、Items sold→orders、Revenue→revenue`，`sourceType=shopStats`。
+- 币种/符号（£/US$）只取数字；识别不到的项返回 null，绝不臆造。
+
+### D. 体验与稳健性
+- 显示每个字段的“**待确认**”态（模型填的值高亮，用户改过后转为普通态）；`confidence` 低或字段矛盾时给提示。
+- 多图合并：把多张图识别结果按字段归并（同字段冲突时保留更可信来源，并提示）。
+- 图片先压缩（最长边 ~1280px、JPEG）再传，兼顾清晰度与 token。
+- 隐私：**截图仅在用户点“识别”时**才发送到所配置的 AI 服务；UI 明示。
+- 降级：未配置 `aiVisionModel`/Key 时，隐藏“识别”按钮，纯手填照常。
+- 桌面版（Tauri）从原生/后端发请求，绕开浏览器 CORS，并让 Key 不进前端（**推荐**）。
+
+### E. 识别质量兜底
+- 识别是**辅助**，最终以用户确认为准；保存的仍是用户核对后的数值。
+- 建议保留“原截图”可选存入该 Snapshot（便于日后核对），或至少记录 `sourceType`。
+
+---
+
 ## 7. “今天已记录 N 次”计数
 统计**当天**新增的 Action + Snapshot + Review 的总数。每次记录后弹提示“已记录 · 今天第 N 次”，首页常驻显示。目的：让我有“我今天又跟进了一次”的即时反馈。
 
@@ -358,7 +406,8 @@ Settings 增加“AI 分析”区块，字段：
 - Etsy API / 订单同步 / **自动**改价改广告 / 自动发布。
   （注意：**AI 分析与建议是核心功能，见 §6.8**；但 AI 只“分析+建议”，**不自动执行**任何改价/改广告/发布，执行由用户手动完成。）
 - 账号系统 / 服务器端鉴权 / 多人实时协作（同步是单人多设备，最后写入者为准）。
-- 截图 OCR 自动填数（曾讨论，暂不做；数据由手动抄录，再交给 AI 分析）。
+
+> 注：**截图识别自动填数已改为“要做”**（用 vision 模型，见 §6.9），不再是排除项。
 
 ---
 
@@ -375,6 +424,7 @@ Settings 增加“AI 分析”区块，字段：
 - [ ] GitHub 同步：测试连接/上传/拉取/自动同步。
 - [ ] 中英切换、深浅主题。
 - [ ] **AI 配置**（Base URL/Model/Key）可保存；未配置时 AI 功能隐藏。
+- [ ] **AI 截图识别（§6.9）**：在“记录数据”里粘贴/拖入 Etsy 截图（广告页或店铺 Stats，含多图），vision 模型返回结构化 JSON 并自动回填，前端重算 CTR/CVR，用户核对后保存；未配置 vision 模型时“识别”按钮隐藏。
 - [ ] **AI 单条诊断**：详情页点“AI 分析”，把该 Listing 的数据快照+改动+实验发给模型，返回趋势解读+诊断+排序建议，并存为 AiInsight 可回看。
 - [ ] **AI 今日简报**：AI 分析中心生成“今天做什么”的行动清单。
 - [ ] **AI 问答**：可基于我的数据自然语言问答。
@@ -386,5 +436,8 @@ Settings 增加“AI 分析”区块，字段：
 ## 13. 给 Codex 的实现提示
 - 优先复用参考仓库的领域逻辑（数据模型、CTR/CVR 计算、Attention Score、Untouched Winner、备份/同步）。
 - 若做桌面版：Tauri + 现有 React 组件 + SQLite；把现有 Dexie 仓库层替换为 SQLite 数据访问层，接口保持一致（createListing/addAction/addSnapshot/completeReview/experiment/backup/sync 等）。
-- **AI 分析（§6.8）是本次核心新增**：抽象一个 `AiClient`（OpenAI 兼容 chat/completions，可配置 baseURL/model/key），一个 `buildContext(scope)` 把本地数据整理成 prompt，一个 `analyze(kind, scope)` 返回并落库为 `AiInsight`。桌面版从原生/后端发请求以绕开 CORS。先做“单条诊断 + 今日简报 + 问答”，其余（改动效果/实验解读/打法库/周报）复用同一管线。
+- **AI 是本次核心新增，分两条：截图识别（§6.9）+ 深度分析（§6.8）**。抽象一个 `AiClient`（OpenAI 兼容 chat/completions，可配置 baseURL、model、visionModel、key）：
+  - 识别：`extractMetricsFromImages(images[]) → 结构化 JSON`（多模态请求，严格 JSON，前端重算 CTR/CVR）。接到“记录数据”弹窗，识别后回填、用户确认再落库。
+  - 分析：`buildContext(scope)` 把本地数据整理成 prompt，`analyze(kind, scope)` 返回并落库为 `AiInsight`。先做“单条诊断 + 今日简报 + 问答”，其余（改动效果/实验解读/打法库/周报）复用同一管线。
+  - 桌面版从原生/后端发请求以绕开 CORS，并让 key 不进前端。
 - 保持“**记录快、回看清、别像 ERP**”这条主线；任何新功能都不能拖慢“记录改动/记录数据”这两个高频动作。**分析可以很重、很详细，但记录必须很轻。**
